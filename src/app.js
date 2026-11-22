@@ -929,16 +929,18 @@ function updateBugs(dt) {
       let want = ang;
       if (b.state === 'fly' && b.tgt) want = Math.atan2(b.tgt.y - b.y, b.tgt.x - b.x);
       const near = b.state === 'fly' && b.tgt ? clamp(1 - dist(b, b.tgt) / 300, 0, 1) : 0;
-      const na = ang + angDiff(ang, want) * Math.min(1, dt * (0.8 + near * 5));
+      // close in: home straight onto the target so it can't orbit it
+      const na = b.state === 'fly' && b.tgt && dist(b, b.tgt) < 90 ? want : ang + angDiff(ang, want) * Math.min(1, dt * (0.8 + near * 5));
       b.vx = Math.cos(na) * sp; b.vy = Math.sin(na) * sp + noise1(b.t * 3 + b.ph) * 20 * dt;
       b.x += b.vx * dt; b.y += b.vy * dt;
 
       if (b.state === 'fly' && b.tgt && b.z > 0) {
         // approaching the web from in front: depth closes as it nears its target point
+        // depth closes over time (it can't hover in front of the web forever)
         const rem = dist(b, b.tgt);
-        b.z = Math.min(b.z, b.z0 != null ? b.z0 * rem / b.d0 : b.z);
-        if (b.z0 == null) b.z0 = b.z;
-        if (rem < Math.max(b.T.size * 0.5, b.T.speed * dt * 1.5)) b.z = 0;
+        if (b.z0 == null) { b.z0 = b.z; b.tz = b.d0 / b.T.speed; }
+        b.z = Math.min(b.z, b.z0 * rem / b.d0, b.z0 * (1 - b.t / (b.tz * 1.7)));
+        if (rem < Math.max(b.T.size * 0.5, b.T.speed * dt * 1.5) || b.z <= 0) b.z = 0;
       }
       if (b.state === 'fly' && b.z <= 0 && !b.crossed) {
         b.crossed = true;   // it reaches the plane of the web here
