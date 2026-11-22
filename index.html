@@ -561,7 +561,7 @@ function* floatLine(dir) {
   const farX = dir > 0 ? sc.xR : sc.xL, span = Math.abs(sc.xR - sc.xL);
   let t = 0, ok = false;
   const simulate = (pinTail) => {
-    const base = F.pts[0]; base.x = base.px = S.x; base.y = base.py = S.y;
+    const base = F.pts[0], bp = F.toMouth ? mouthPos() : S; base.x = base.px = bp.x; base.y = base.py = bp.y;
     const wvx = wind.x * 2.5, wvy = wind.y * 1.6 - 6;
     for (let i = 1; i < F.pts.length; i++) {
       const p = F.pts[i]; if (pinTail && i === F.pts.length - 1) continue;
@@ -593,7 +593,8 @@ function* floatLine(dir) {
     if (F.pts.some(p => p.y > sc.yB - 6)) { floatL_reason = 'ground'; break; } if (F.total > span * 2.6) { floatL_reason = 'long'; break; } if (t > 70) { floatL_reason = 'time'; break; }
     yield;
   }
-  if (!ok) { // reel it back in and eat it
+  if (!ok) { // reel it back in with the legs and eat it
+    F.toMouth = true;
     while (F.pts.length > 1) {
       const n = Math.max(1, Math.round(60 * DT / F.seg)); F.pts.splice(1, n); F.total = (F.pts.length - 1) * F.seg; simulate(false); yield;
     }
@@ -1541,6 +1542,7 @@ for (let i = 0; i < 4; i++) for (const s of [-1, 1]) S.legs.push({ def: LEGDEF[i
 const PERCH_ANG = [0.42, 1.0, 1.85, 2.6];
 const PERCH_ORDER = [0, 4, 2, 6, 1, 5, 3, 7];
 const ABD = () => 208 * SS;
+const mouthPos = () => toWorld((350 - 2) * SS, 0);   // chelicerae, just behind the palps
 function bodyOrigin() { // where the spinnerets would be with the abdomen straight
   const b = S.bend || 0; if (!b) return { x: S.x, y: S.y };
   const a = ABD(), px = S.x + Math.cos(S.ang + b) * a, py = S.y + Math.sin(S.ang + b) * a;
@@ -1736,11 +1738,11 @@ function drawWeb(c, unit) {
   const lightAng = hot ? Math.atan2((hub ? hub.y : 600) - hot.y, (hub ? hub.x : 960) - hot.x) : -Math.PI / 2;
   const base = pal.silk, A = pal.silkA, glow = hot ? (pal.sunUp ? 1 : 0.5) : 0.2;
   const nb = 5, paths = []; for (let i = 0; i < nb * 2; i++) paths.push(new Path2D());
-  const capture = [];
+  const capture = [], MO = mouthPos();
   for (const e of edges) {
     if (!e.alive || e.type === 'sub') continue;
     let ax = e.a.x, ay = e.a.y, bx = e.b.x, by = e.b.y;
-    if (e.eat >= 0) { const k = smooth(e.eat); ax = lerp(ax, S.x, k); ay = lerp(ay, S.y, k); bx = lerp(bx, S.x, k); by = lerp(by, S.y, k); }
+    if (e.eat >= 0) { const k = smooth(e.eat); ax = lerp(ax, MO.x, k); ay = lerp(ay, MO.y, k); bx = lerp(bx, MO.x, k); by = lerp(by, MO.y, k); }   // gathered into the jaws
     const dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy); if (d < 0.05) continue;
     const ea = Math.atan2(dy, dx);
     let gl = Math.abs(Math.sin(ea - lightAng)); gl = gl * gl * gl;
@@ -2064,7 +2066,7 @@ setTimeout(() => helpEl.classList.remove('show'), 7000);
 
 // boot
 resize(); applyScale(); makeSky(); makeGlow(); newScene(); brain = lifeCycle();
-window.__ow = { get lineHold() { return S.lineHold; }, get bend() { return S.bend; }, legDbg: () => S.legs.filter(L => L.i === 2).map(L => { const g = legGeom(L); const nr = nearestThread(g.ideal.x, g.ideal.y, g.len * 1.05, g.hip.x, g.hip.y, g.len * 0.95, g.len * 0.38); const nr0 = nearestThread(g.hip.x, g.hip.y, g.len * 2, g.hip.x, g.hip.y, 999, 0); return { air: L.air, step: !!L.step, len: g.len | 0, hip: [g.hip.x | 0, g.hip.y | 0], ideal: [g.ideal.x | 0, g.ideal.y | 0], found: !!nr, nearestAny: nr0 ? [nr0.e.type, ptOf(nr0).x | 0, ptOf(nr0).y | 0] : null, S: [S.x | 0, S.y | 0, S.ang.toFixed(2)], mode: S.mode, ref: S.ref ? resolve(S.ref).e.type : null }; }), spawnBug: t => spawnBug(t), get bugs() { return bugs; }, get damage() { return damage; }, S, view, reset: () => { newScene(); brain = lifeCycle(); }, wind, get edges() { return edges; }, get nodes() { return nodes; }, get radii() { return radii; }, get caption() { return caption; }, get hour() { return hour; }, set hour(v) { hour = v; lastTintT = -1; }, CFG, stats, get simTime() { return simTime; }, step, render, geom: () => geom };
+window.__ow = { get eating() { return edges.some(e => e.alive && e.eat > 0.35 && e.eat < 0.7); }, get lineHold() { return S.lineHold; }, get bend() { return S.bend; }, legDbg: () => S.legs.filter(L => L.i === 2).map(L => { const g = legGeom(L); const nr = nearestThread(g.ideal.x, g.ideal.y, g.len * 1.05, g.hip.x, g.hip.y, g.len * 0.95, g.len * 0.38); const nr0 = nearestThread(g.hip.x, g.hip.y, g.len * 2, g.hip.x, g.hip.y, 999, 0); return { air: L.air, step: !!L.step, len: g.len | 0, hip: [g.hip.x | 0, g.hip.y | 0], ideal: [g.ideal.x | 0, g.ideal.y | 0], found: !!nr, nearestAny: nr0 ? [nr0.e.type, ptOf(nr0).x | 0, ptOf(nr0).y | 0] : null, S: [S.x | 0, S.y | 0, S.ang.toFixed(2)], mode: S.mode, ref: S.ref ? resolve(S.ref).e.type : null }; }), spawnBug: t => spawnBug(t), get bugs() { return bugs; }, get damage() { return damage; }, S, view, reset: () => { newScene(); brain = lifeCycle(); }, wind, get edges() { return edges; }, get nodes() { return nodes; }, get radii() { return radii; }, get caption() { return caption; }, get hour() { return hour; }, set hour(v) { hour = v; lastTintT = -1; }, CFG, stats, get simTime() { return simTime; }, step, render, geom: () => geom };
 requestAnimationFrame(frame);
 })();
 </script>
