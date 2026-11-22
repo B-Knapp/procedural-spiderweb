@@ -1,0 +1,12 @@
+{
+  "name": "procedural-spiderweb",
+  "private": true,
+  "description": "Orb weaver web-weaving screensaver",
+  "scripts": {
+    "build": "python3 tools/build.py",
+    "test": "node tools/smoke-test.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}

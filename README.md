@@ -39,10 +39,30 @@ Silk is a graph of nodes and rope constraints that pull but never push. Slack li
 
 ## Code layout
 
-- `src/app.js`: the simulation and renderer. Sections run from the silk graph and physics, to the spider's movements (walk, reach, lay line, drop, eat), to its behaviour (natural orb weaving, prey, repair), to the scene and lighting. The behaviour section is separate from the movements so other behaviours (for example a mode that writes words) can reuse them.
+`index.html` is the built, self-contained screensaver. Edit the sources, then rebuild.
+
+- `src/js/`: the simulation and renderer, split by area. The files share one scope and are concatenated in name order:
+  - `00-core.js`: config and math helpers
+  - `01-silk.js`: the silk graph and its physics
+  - `02-motor.js`: what the spider can physically do (walk, reach, lay a line, drop, eat)
+  - `03-orb-weaving.js`: the web-building behaviour, built only from those moves
+  - `04-prey.js`: insects, damage, repair, and tending the finished web
+  - `05-life.js`: the daily loop (build, tend, take down, repeat)
+  - `06-scene.js`: the farm, lighting by time of day
+  - `07-spider-rig.js`: sprites, leg IK and gait
+  - `08-render.js`: per-frame drawing
+  - `09-main.js`: main loop and controls
+
+  New behaviours (such as a mode that writes words) go alongside `03`/`04` and reuse the moves in `02`.
 - `src/index.html.tpl`: the page shell.
 - `assets/`: spider sprites cut from `art/rig-sheet.png`, plus `meta.json` with joint points.
-- `tools/cut_sprites.py`: regenerates the sprites from the rig sheet (needs numpy, scipy and opencv).
-- `tools/build.py`: builds the self-contained `index.html` from `src/` and `assets/`.
 
-After editing `src/app.js`, run `python3 tools/build.py`.
+## Building and testing
+
+```
+python3 tools/build.py        # rebuild index.html after editing src/
+npm install && npx playwright install chromium
+npm test                      # runs a full web cycle headlessly and checks each stage
+```
+
+`tools/cut_sprites.py` regenerates the sprites from the rig sheet (needs numpy, scipy and opencv). Opening `index.html?debug` exposes the test hooks.
