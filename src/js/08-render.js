@@ -20,7 +20,6 @@ function drawWeb(c, unit) {
   const lightAng = hot ? Math.atan2((hub ? hub.y : 600) - hot.y, (hub ? hub.x : 960) - hot.x) : -Math.PI / 2;
   const base = pal.silk, A = pal.silkA, glow = hot ? (pal.sunUp ? 1 : 0.5) : 0.2;
   const nb = 5, paths = []; for (let i = 0; i < nb * 2; i++) paths.push(new Path2D());
-  const bandP = new Path2D();
   const capture = [], MO = mouthPos();
   for (const e of edges) {
     if (!e.alive || e.type === 'sub') continue;
@@ -31,7 +30,6 @@ function drawWeb(c, unit) {
     let gl = Math.abs(Math.sin(ea - lightAng)); gl = gl * gl * gl;
     if (hot) { const mx = (ax + bx) / 2 - hot.x, my = (ay + by) / 2 - hot.y; gl *= 0.45 + 0.55 * Math.exp(-(mx * mx + my * my) / (2 * 520 * 520)); }
     gl = clamp(gl * glow + 0.08 * Math.sin(simTime * 0.7 + e.h * 20) + 0.04, 0, 0.999);
-    if (e.type === 'band') { if (e.hidden || e.stroke != null && !e.tie) continue; bandP.moveTo(ax, ay); bandP.lineTo(bx, by); continue; }
     const thin = e.type === 'capture' || e.type === 'rim' || e.type === 'aux' || e.type === 'hub' || e.type === 'carry' || e.type === 'stub' || e.type === 'glue';
     const p = paths[(thin ? nb : 0) + Math.floor(gl * nb)];
     p.moveTo(ax, ay);
@@ -48,9 +46,6 @@ function drawWeb(c, unit) {
     c.lineWidth = unit * (thin ? 0.75 : 1.1) * (CFG.pixel ? 0.55 : 1);
     c.stroke(paths[i]);
   }
-  // letters: tie-down threads, then each stroke as a cord of parallel strands
-  c.strokeStyle = rgb(mix(base, hl, 0.5), clamp(A * 0.9, 0, 1)); c.lineWidth = unit * 0.7; c.stroke(bandP);
-  if (geom.writing) drawWebLetters(c, unit, base, hl, A);
 
   // glue droplets on the capture spiral (they bead up a few seconds after laying)
   if (!CFG.pixel) {
@@ -364,62 +359,4 @@ function drawBugs(c, unit) {
       c.stroke();
     }
   }
-}
-
-// letters made of web: each stroke is a band of loose, wandering strands braced by short
-// cross-threads, wider on downstrokes, fraying into stray threads at the ends
-function drawWebLetters(c, unit, base, hl, A) {
-  const strands = new Path2D(), mesh = new Path2D(), fray = new Path2D();
-  const NS = CFG.pixel ? 3 : 5;
-  for (const st of geom.writing.strokes) {
-    const N = st.nodes; if (!N || N.length < 4) continue;
-    const pairs = Math.floor(N.length / 2);
-    // centre line and half-width vector per pair; width follows the stroke direction
-    const C = [], Hv = [], ok = [];
-    for (let k = 0; k < pairs; k++) {
-      const ev = N[2 * k], od = N[2 * k + 1];
-      const segOK = ev.alive && od.alive && (k === 0 || ((st.rail[2 * k] || {}).alive && (st.rail[2 * k + 1] || {}).alive));
-      const cx = (ev.x + od.x) / 2, cy = (ev.y + od.y) / 2;
-      const k2 = Math.min(pairs - 1, k + 1), k0 = Math.max(0, k - 1);
-      const ax = (N[2 * k2].x + N[2 * k2 + 1].x) / 2 - (N[2 * k0].x + N[2 * k0 + 1].x) / 2, ay = (N[2 * k2].y + N[2 * k2 + 1].y) / 2 - (N[2 * k0].y + N[2 * k0 + 1].y) / 2;
-      const dirA = Math.atan2(ay, ax);
-      const w = 0.55 + 0.75 * Math.abs(Math.sin(dirA - 0.25));       // calligraphic: thick downstrokes
-      C.push({ x: cx, y: cy }); Hv.push({ x: (od.x - ev.x) / 2 * w * 1.25, y: (od.y - ev.y) / 2 * w * 1.25 }); ok.push(segOK);
-    }
-    const P = (k, f) => ({ x: C[k].x + Hv[k].x * f, y: C[k].y + Hv[k].y * f });
-    const sid = st.id * 7.13;
-    // wandering strands
-    const fOf = (s_, k) => -1 + 2 * (s_ + 0.5) / NS + noise1(k * 0.15 + s_ * 13.7 + sid) * 0.4;
-    for (let s_ = 0; s_ < NS; s_++) {
-      let pen = false;
-      for (let k = 0; k < pairs; k++) {
-        if (!ok[k]) { pen = false; continue; }
-        const p = P(k, fOf(s_, k));
-        if (pen) strands.lineTo(p.x, p.y); else { strands.moveTo(p.x, p.y); pen = true; }
-      }
-    }
-    // short diagonal cross-threads between neighbouring strands: the web texture
-    for (let k = 1; k < pairs - 1; k++) {
-      const h = hash1(st.id * 977 + k);
-      if (h > 0.8 || !ok[k] || !ok[k + 1]) continue;
-      const s1 = Math.floor(h / 0.8 * (NS - 1)), s2 = s1 + 1;
-      const a = P(k, fOf(s1, k)), b = P(Math.min(pairs - 1, k + 1 + (h > 0.3 ? 1 : 0)), fOf(s2, k + 1));
-      mesh.moveTo(a.x, a.y); mesh.lineTo(b.x, b.y);
-    }
-    // frayed ends: strands fan out and trail off past the end of the stroke
-    for (const end of [0, pairs - 1]) {
-      if (!ok[end]) continue;
-      const nb = end === 0 ? 1 : pairs - 2; if (nb < 0 || nb >= pairs) continue;
-      const dx = C[end].x - C[nb].x, dy = C[end].y - C[nb].y, d = Math.hypot(dx, dy) || 1;
-      for (let s_ = 0; s_ < NS; s_++) {
-        const h = hash1(st.id * 31 + end * 7 + s_); if (h > 0.45) continue;
-        const p = P(end, fOf(s_, end)), L = geom.writing.band * (0.5 + h * 2.2), spread = (s_ - (NS - 1) / 2) * 0.28;
-        const ux = dx / d, uy = dy / d, ca = Math.cos(spread), sa = Math.sin(spread);
-        fray.moveTo(p.x, p.y); fray.lineTo(p.x + (ux * ca - uy * sa) * L, p.y + (ux * sa + uy * ca) * L);
-      }
-    }
-  }
-  const col = rgb(mix(base, hl, 0.85), clamp(A * 1.4 + 0.25, 0, 1));
-  c.strokeStyle = col; c.lineWidth = unit * (CFG.pixel ? 0.8 : 0.95); c.stroke(strands);
-  c.strokeStyle = rgb(mix(base, hl, 0.6), clamp(A * 1.0 + 0.1, 0, 1)); c.lineWidth = unit * 0.55; c.stroke(mesh); c.stroke(fray);
 }

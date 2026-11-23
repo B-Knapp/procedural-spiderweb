@@ -147,7 +147,7 @@ function makeLine(a, b, rest, type) {
 
 // ------------------------------------------------------------ physics (rope: tension only)
 const GRAV = 70, DAMP = 0.982, ITER = 12;
-const STIFFT = { rim: 1, band: 1, bridge: 1, frame: 1, anchor: 1, sub: 1, glue: 1, stub: 0.6, radius: 0.7, loose: 0.9, carry: 0.9, hub: 0.5, aux: 0.5, capture: 0.35 };
+const STIFFT = { rim: 1, bridge: 1, frame: 1, anchor: 1, sub: 1, glue: 1, stub: 0.6, radius: 0.7, loose: 0.9, carry: 0.9, hub: 0.5, aux: 0.5, capture: 0.35 };
 const wind = { x: 0, y: 0, t: rand(0, 1000) };
 function updateWind(dt) {
   wind.t += dt;
@@ -160,7 +160,7 @@ function physics(dt) {
   for (const n of nodes) {
     if (n.fixed || !n.alive) { n.fx = n.fy = 0; continue; }
     const vx = (n.x - n.px) * DAMP, vy = (n.y - n.py) * DAMP; n.px = n.x; n.py = n.y;
-    const g = n.heavy ? 900 : n.light ? 0 : GRAV, wf = n.heavy ? 0.25 : n.light ? 0.15 : 1;
+    const g = n.heavy ? 900 : GRAV, wf = n.heavy ? 0.25 : 1;
     n.x += vx + (n.fx + wx * wf) * dt2; n.y += vy + (g + n.fy + wy * wf) * dt2; n.fx = n.fy = 0;
     if (sc && !n.noClamp) { n.x = clamp(n.x, sc.xL + 1, sc.xR - 1); n.y = clamp(n.y, sc.yT + 1, sc.yB - 1); }
   }
@@ -168,7 +168,7 @@ function physics(dt) {
     const e = edges[i]; if (!e.alive) continue;
     const a = e.a, b = e.b, w = a.im + b.im; if (w === 0) continue;
     const dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy);
-    if ((d <= e.rest && !e.rod) || d < 1e-6) continue;   // threads only pull; letter ribbons (rods) also push
+    if (d <= e.rest || d < 1e-6) continue;
     const k = (d - e.rest) / (d * w) * e.k;
     a.x += dx * k * a.im; a.y += dy * k * a.im; b.x -= dx * k * b.im; b.y -= dy * k * b.im;
   }
@@ -294,7 +294,7 @@ class Heap {
     return top;
   }
 }
-const COST = { band: 1.3, sub: 1.15, bridge: 1, frame: 1, radius: 1, loose: 1.1, hub: 1.8, aux: 1.4, capture: 9 };
+const COST = { sub: 1.15, bridge: 1, frame: 1, radius: 1, loose: 1.1, hub: 1.8, aux: 1.4, capture: 9 };
 function dijkstra(fromRef, visit) {
   const r = resolve(fromRef); if (!r) return null;
   const dist_ = new Map(), prev = new Map(), h = new Heap(); const L = r.e.len() * (COST[r.e.type] || 1);
@@ -423,7 +423,7 @@ function spiderKinematics() {
   }
   if (S.holding && S.holding.node) { const n = S.holding.node, bk = BL * 0.12; n.x = n.px = S.x - Math.cos(S.ang) * bk; n.y = n.py = S.y - Math.sin(S.ang) * bk; }
   if (S.mode === 'perch' && S.perch) { const h = S.perch; S.x = h.x; S.y = h.y - BL * 0.5; h.fy += SW; }
-  S.bend = lerp(S.bend || 0, S.spiral || S.sewing ? (S.bendT || 0) : 0, 1 - Math.exp(-20 * DT));
+  S.bend = lerp(S.bend || 0, S.spiral ? (S.bendT || 0) : 0, 1 - Math.exp(-20 * DT));
   const c = S.carry;
   if (c) {
     if (c.tip.fixed) { const h = S.lineHold; c.tip.x = c.tip.px = h ? h.x : S.x; c.tip.y = c.tip.py = h ? h.y : S.y; }
@@ -860,10 +860,10 @@ function* phaseFinish() {
 }
 function nearestWalkRef() { const nr = nearestThread(S.x, S.y, 400, S.x, S.y, 400); return nr; }
 
-// Behaviour: writing mode. After building a normal orb, the spider sews a word into the web as
-// cords of dense white silk, tied to the threads they cross (a little like the stabilimenta some
-// orb weavers add). The web stays whole. Letters stay until the next web and are re-sewn if an
-// insect tears them. (carveStroke is kept for a later negative-space variant.)
+// Behaviour: writes-words mode. After finishing an orb, the spider writes a band name into it as
+// negative space: each thread crossing a letter is cut at the letter's edge and laid back round
+// the outline, so the letters read as clear holes ringed by bunched silk. The word stays until
+// the next web.
 
 // famous bands, 1967-2010 (names with punctuation or digits are left out for now)
 const BANDS = [
@@ -939,26 +939,6 @@ function spiralSpan(y0, y1) {
   }
   return any && hi > lo ? { lo, hi } : null;
 }
-function layoutWord(text) {
-  const words = text.split(' ');
-  const lines = words.length > 1 && text.length > 7 ? words : [text];
-  const Rb = geom.env ? geom.env.Rb : geom.Rm, sq = geom.env ? geom.env.squash : 0.2;
-  const top = hub.y + (geom.Z || Rb * 0.2) + Rb * 0.02, bottom = hub.y + Rb * (1 + sq) * 0.97;
-  for (let h = Rb * 0.5; h >= 24; h *= 0.95) {
-    const gap = h * 0.38, blockH = lines.length * h + (lines.length - 1) * gap;
-    if (top + blockH > bottom) continue;
-    const y0 = top + (bottom - top - blockH) * 0.3;
-    const placed = []; let ok = true;
-    for (let i = 0; i < lines.length && ok; i++) {
-      const ya = y0 + i * (h + gap), span = spiralSpan(ya - h * 0.2, ya + h * 1.2);
-      const w = lineWidth(lines[i]) * h;
-      if (!span || w > (span.hi - span.lo) - h * 0.35) ok = false;
-      else placed.push({ text: lines[i], x0: (span.lo + span.hi) / 2 - w / 2, y: ya });
-    }
-    if (ok) return { h, lines: placed };
-  }
-  return null;
-}
 // turn the layout into world-space strokes, finely resampled
 function wordStrokes(L) {
   const out = [];
@@ -972,8 +952,7 @@ function wordStrokes(L) {
         const pts = poly.map(([gx, gy]) => ({ x: x + gx * L.h, y: ln.y + gy * L.h }));
         const free = [0, poly.length - 1].map(i => !g.s.some(q => q.some(([qx, qy], k) => !(q === poly && k === i) && Math.hypot(qx - poly[i][0], qy - poly[i][1]) < 0.03)));
         const startI = out.length;
-        // split at sharp corners (N, M, V, W, Z...): a ribbon can't turn on a point, so each
-        // straight run is sewn separately and welded at the corner
+        // split at sharp corners (N, M, V, W, Z...) so widths are worked out per straight run
         let run = [pts[0]];
         for (let i = 1; i < pts.length; i++) {
           run.push(pts[i]);
@@ -1020,70 +999,6 @@ function resample(pts, step) {
   return out;
 }
 const segDist = (p, a, b) => { const ex = b.x - a.x, ey = b.y - a.y, l2 = ex * ex + ey * ey; const t = l2 ? clamp(((p.x - a.x) * ex + (p.y - a.y) * ey) / l2, 0, 1) : 0; return Math.hypot(a.x + ex * t - p.x, a.y + ey * t - p.y); };
-function nearStroke(p, st, r) { const P = st.pts; for (let i = 1; i < P.length; i++) if (segDist(p, P[i - 1], P[i]) < r) return true; return false; }
-function inLetterHalo(x, y) {
-  const W = geom.writing; if (!W) return false;
-  for (const st of W.strokes) if (nearStroke({ x, y }, st, W.halo)) return true;
-  return false;
-}
-
-// ---- carving: walk the letter, eating the sticky spiral around it
-function* carveStroke(st, halo) {
-  const reach = BL * 1.3;
-  const target = () => edges.filter(e => e.alive && e.eat < 0 && e.type === 'capture' && nearStroke({ x: (e.a.x + e.b.x) / 2, y: (e.a.y + e.b.y) / 2 }, st, halo));
-  const P = st.pts, stepN = Math.max(1, Math.round(BL * 0.45 / Math.max(1, dist(P[0], P[1] || P[0]))));
-  for (let i = 0; i < P.length; i += stepN) {
-    const p = P[i];
-    yield* moveFree(() => p, REACH * 1.1);
-    const mo = mouthPos();
-    const near = target().filter(e => Math.hypot((e.a.x + e.b.x) / 2 - mo.x, (e.a.y + e.b.y) / 2 - mo.y) < reach);
-    if (near.length) yield* eatEdges(near, 0.18);
-  }
-  // anything left in the halo: go to it and eat it
-  for (let g = 0; g < 60; g++) {
-    const left = target(); if (!left.length) break;
-    const e = left.reduce((a, b) => dist(S, { x: (a.a.x + a.b.x) / 2, y: (a.a.y + a.b.y) / 2 }) < dist(S, { x: (b.a.x + b.b.x) / 2, y: (b.a.y + b.b.y) / 2 }) ? a : b);
-    const m = { x: (e.a.x + e.b.x) / 2, y: (e.a.y + e.b.y) / 2 };
-    yield* moveFree(() => { const a = Math.atan2(m.y - S.y, m.x - S.x); return { x: m.x - Math.cos(a) * BL * 0.9, y: m.y - Math.sin(a) * BL * 0.9 }; }, REACH * 1.1);
-    yield* eatEdges([e], 0.18);
-  }
-}
-// ---- sewing: lay a zig-zag ribbon along the stroke, braced into a rigid band and tied to the
-// radii it crosses (and to the threads at its ends)
-function* sewStroke(st, W) {
-  const P = st.pts, half = W.band / 2;
-  // go to the start along the silk, then step onto it
-  const r = nearestRefTypes(P[0].x, P[0].y, ['radius', 'capture', 'frame', 'bridge', 'hub', 'anchor']);
-  if (r) { if (S.ref) yield* walkTo({ ref: r }); else yield* reachTo(r, REACH); }
-  yield* moveFree(() => P[0], REACH);
-  S.sewing = true;
-  const made = [];
-  const tie = (n, avoidBand) => {   // attach a ribbon node to the nearest real thread
-    const nr = nearestRefTypes(n.x, n.y, avoidBand ? ['radius', 'capture', 'frame', 'bridge', 'hub', 'anchor'] : ['radius', 'capture', 'frame', 'bridge', 'hub', 'anchor', 'band'], W.band * 2.2);
-    if (!nr || nr.e.stroke === st.id) return;
-    const m = nodeAtRef(nr); const e = new Edge(n, m, dist(n, m), 'band'); e.stroke = st.id; e.tie = true;
-  };
-  let lastTieE = null;
-  for (let i = 0; i < P.length; i++) {
-    const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)];
-    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, nx = -dy / d, ny = dx / d;
-    const side = i % 2 ? 1 : -1, q = { x: P[i].x + nx * half * side, y: P[i].y + ny * half * side };
-    S.face = Math.atan2(dy, dx); S.bendT = -side * 0.35;
-    yield* moveFree(() => q, REACH * 0.9);
-    const n = new Node(q.x, q.y, true); fasten(n);   // stitched down: moves with the web around it
-    for (const k of [1, 2]) if (made.length >= k) { const o = made[made.length - k]; const e = new Edge(o, n, dist(o, n), 'band'); e.stroke = st.id; e.born = simTime; if (k === 2) (st.rail = st.rail || [])[made.length] = e; else e.hidden = true; }
-    made.push(n);
-    // tie to radii the ribbon crosses (once per thread)
-    const cross = i % 3 === 0 ? nearestRefTypes(P[i].x, P[i].y, ['radius', 'frame', 'bridge', 'hub', 'anchor', 'capture'], W.halo * 1.15) : null;
-    if (cross && (i - (st.lastTie ?? -99) >= 6 || cross.e.rid !== lastTieE)) {
-      lastTieE = cross.e.rid; st.lastTie = i; const m = nodeAtRef(cross); const e = new Edge(n, m, dist(n, m), 'band'); e.stroke = st.id; e.tie = true;
-    }
-    yield* pause(0.03);
-  }
-  if (made.length) { tie(made[0], false); tie(made[made.length - 1], false); }
-  st.nodes = made;
-  S.sewing = false; S.face = null; S.bendT = 0;
-}
 // fasten a letter node to the nearest few web nodes, so it follows the web as it sways
 function fasten(n) {
   const cand = [];
@@ -1104,51 +1019,10 @@ function updateFastened() {
     if (sw > 0) { n.x = n.px = sx / sw; n.y = n.py = sy / sw; }
   }
 }
-function* writeWord() {
-  if (!CFG.writing || !hub || !geom.env) return;
-  let L = null, word = '';
-  for (let t = 0; t < 12 && !L; t++) { word = pickWord(); L = layoutWord(word); }
-  if (!L) return;
-  const strokes = wordStrokes(L);
-  const W = { word, strokes, h: L.h, band: Math.max(4, L.h * 0.11) }; W.halo = W.band * 1.6;
-  geom.writing = W;
-  say('Writing', `writing “${word}” into the web`);
-  yield* walkTo({ node: hub });
-  // group strokes by the letter they belong to
-  const groups = [];
-  for (const st of strokes) { const g = groups[groups.length - 1]; if (g && g.letter === st.letter) g.list.push(st); else groups.push({ letter: st.letter, ch: st.ch, list: [st] }); }
-  for (const g of groups) {
-    say('Writing', `sewing the “${g.ch}” of ${word} in dense white silk`);
-    for (const st of g.list) yield* sewStroke(st, W);
-  }
-  yield* backOnSilk();
-  say('Writing', `finished: ${word}`);
-  yield* walkTo({ node: hub });
-}
-// re-sew a letter stroke an insect tore: eat what's left of it, then sew it again
-function* resewStroke(id) {
-  const W = geom.writing; if (!W) return;
-  const st = W.strokes[id]; if (!st) return;
-  say('Repairing the web', 'mending a torn letter');
-  const rest = edges.filter(e => e.alive && e.type === 'band' && e.stroke === id);
-  if (rest.length) {
-    const m = { x: rest[0].a.x, y: rest[0].a.y };
-    const r = nearestRefTypes(m.x, m.y, ['radius', 'capture', 'frame', 'bridge']);
-    if (r) yield* walkTo({ ref: r }, WALK * 1.2);
-    for (let i = 0; i < st.pts.length; i += 6) { yield* moveFree(() => st.pts[i], REACH * 1.2); const mo = mouthPos(); const near = rest.filter(e => e.alive && Math.hypot((e.a.x + e.b.x) / 2 - mo.x, (e.a.y + e.b.y) / 2 - mo.y) < BL * 1.4); if (near.length) yield* eatEdges(near, 0.12); }
-    const left = rest.filter(e => e.alive); if (left.length) yield* eatEdges(left, 0.15);
-  }
-  for (const n of st.nodes || []) n.alive = false;
-  st.rail = [];
-  yield* sewStroke(st, W);
-  yield* backOnSilk();
-}
-
 // ============================================================ negative-space lettering
-// The spider chews letter-shaped holes out of the sticky spiral, cutting each spiral thread
-// exactly where it meets the letter's edge, then reinforces each hole with a rim thread tied to
-// every cut end and every radius it crosses. Radii keep running through the holes, so the middles
-// of letters like O and A stay as web.
+// Letter shapes are distance fields round stroke centrelines (with per-point widths). Threads
+// crossing a letter are re-laid round it (wrapLetter); any that can't be are cut and tied off
+// (cutLetter), and a rim thread lines whatever stretch of the edge nothing else does (rimLetter).
 const segT = (p, a, b) => { const ex = b.x - a.x, ey = b.y - a.y, l2 = ex * ex + ey * ey; return l2 ? clamp(((p.x - a.x) * ex + (p.y - a.y) * ey) / l2, 0, 1) : 0; };
 function letterField(strokes, R = 0) { return p => { let m = 1e9; for (const st of strokes) { const P = st.pts, rs = st.rs, add = R * (1 - (st.rf || 1)); for (let i = 1; i < P.length; i++) { let d; if (rs) { const a = P[i - 1], b = P[i], t = segT(p, a, b); d = Math.hypot(a.x + (b.x - a.x) * t - p.x, a.y + (b.y - a.y) * t - p.y) + R - lerp(rs[i - 1], rs[i], t); } else d = segDist(p, P[i - 1], P[i]) + add; if (d < m) m = d; } } return m; }; }
 function lerpP(a, b, t) { return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) }; }
@@ -1498,7 +1372,7 @@ function spawnBug(type) {
 function breakEdge(e) {
   if (!e.alive) return;
   if (e.type !== 'glue' && e.type !== 'stub') {
-    damage.push({ type: e.type, a: e.a, b: e.b, rid: e.rid, sector: e.sector, rpos: e.rpos, stroke: e.stroke });
+    damage.push({ type: e.type, a: e.a, b: e.b, rid: e.rid, sector: e.sector, rpos: e.rpos });
     if (e.type === 'capture') geom.broken = (geom.broken || 0) + 1;
     lastDamageT = simTime;
   }
@@ -1569,7 +1443,7 @@ function updateBugs(dt) {
           if (Math.min(ax, e.b.x) > b.x + r || Math.max(ax, e.b.x) < b.x - r || Math.min(ay, e.b.y) > b.y + r || Math.max(ay, e.b.y) < b.y - r) continue;
           const t = clamp(((b.x - ax) * ex + (b.y - ay) * ey) / l2, 0.02, 0.98), d2 = (ax + ex * t - b.x) ** 2 + (ay + ey * t - b.y) ** 2;
           if (d2 > r * r) continue;
-          if (e.type !== 'capture') { dry = true; if (e.type === 'band' && Math.random() < 0.25 * b.T.strength) breakEdge(e); continue; }
+          if (e.type !== 'capture') { dry = true; continue; }
           if (d2 < bd) { bd = d2; best = { e, t }; }
         }
         if (best) {
@@ -1595,7 +1469,7 @@ function updateBugs(dt) {
         if (Math.random() < dt * b.T.tear * (1 - b.para) * 0.35) {     // struggling tears silk
           if (Math.random() < 0.4 && b.glue.some(g => g.alive)) { const g = b.glue.filter(g => g.alive); breakEdge(g[randi(0, g.length - 1)]); }
           else {
-            const near = edges.filter(f => f.alive && f.eat < 0 && (f.type === 'capture' || (f.type === 'band' && Math.random() < 0.15 * b.T.strength) || (f.type === 'radius' && Math.random() < 0.08 * b.T.strength)) && Math.hypot((f.a.x + f.b.x) / 2 - B.x, (f.a.y + f.b.y) / 2 - B.y) < b.T.size * 2);
+            const near = edges.filter(f => f.alive && f.eat < 0 && (f.type === 'capture' || (f.type === 'radius' && Math.random() < 0.08 * b.T.strength)) && Math.hypot((f.a.x + f.b.x) / 2 - B.x, (f.a.y + f.b.y) / 2 - B.y) < b.T.size * 2);
             if (near.length) breakEdge(near[randi(0, near.length - 1)]);
           }
           b.glue = b.glue.filter(g => g.alive);
@@ -1709,9 +1583,6 @@ function* repairWeb() {
       if (ia >= 0 && ib >= 0 && mids.length) { if (ia < ib) R.nodes.splice(ib, 0, ...mids); else R.nodes.splice(ia, 0, ...mids.reverse()); }
     }
   }
-  // 1b. torn letters: re-sew each damaged stroke
-  const torn = [...new Set(D.filter(d => d.type === 'band' && d.stroke != null).map(d => d.stroke))];
-  for (const id of torn) yield* resewStroke(id);
   // 2. holes in the sticky spiral: irregular zig-zag patches between the two radii
   const bySec = new Map();
   for (const d of D) if (d.type === 'capture' && d.sector) { if (!bySec.has(d.sector)) bySec.set(d.sector, []); bySec.get(d.sector).push(d.rpos); }
@@ -1884,7 +1755,7 @@ const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; 
 
 function newScene() {
   nodes = []; edges = []; radii = []; auxBySector = new Map(); hub = null; floatL = null; geom = {};
-  S.carry = null; S.mode = 'walk'; S.face = null; S.perch = null; S.eating = 0; S.holding = null; S.wrapping = null; S.spiral = 0; S.sewing = false; S.bend = 0; S.bendT = 0; S.lineHold = null; bugs = []; damage = []; webUp = false;
+  S.carry = null; S.mode = 'walk'; S.face = null; S.perch = null; S.eating = 0; S.holding = null; S.wrapping = null; S.spiral = 0; S.bend = 0; S.bendT = 0; S.lineHold = null; bugs = []; damage = []; webUp = false;
   const span = rand(700, 860), cx = W / 2 + rand(-60, 60);
   sc = {
     xL: Math.round(cx - span / 2), xR: Math.round(cx + span / 2), yT: Math.round(rand(205, 245)), yB: Math.round(rand(855, 885)),
@@ -2356,7 +2227,6 @@ function drawWeb(c, unit) {
   const lightAng = hot ? Math.atan2((hub ? hub.y : 600) - hot.y, (hub ? hub.x : 960) - hot.x) : -Math.PI / 2;
   const base = pal.silk, A = pal.silkA, glow = hot ? (pal.sunUp ? 1 : 0.5) : 0.2;
   const nb = 5, paths = []; for (let i = 0; i < nb * 2; i++) paths.push(new Path2D());
-  const bandP = new Path2D();
   const capture = [], MO = mouthPos();
   for (const e of edges) {
     if (!e.alive || e.type === 'sub') continue;
@@ -2367,7 +2237,6 @@ function drawWeb(c, unit) {
     let gl = Math.abs(Math.sin(ea - lightAng)); gl = gl * gl * gl;
     if (hot) { const mx = (ax + bx) / 2 - hot.x, my = (ay + by) / 2 - hot.y; gl *= 0.45 + 0.55 * Math.exp(-(mx * mx + my * my) / (2 * 520 * 520)); }
     gl = clamp(gl * glow + 0.08 * Math.sin(simTime * 0.7 + e.h * 20) + 0.04, 0, 0.999);
-    if (e.type === 'band') { if (e.hidden || e.stroke != null && !e.tie) continue; bandP.moveTo(ax, ay); bandP.lineTo(bx, by); continue; }
     const thin = e.type === 'capture' || e.type === 'rim' || e.type === 'aux' || e.type === 'hub' || e.type === 'carry' || e.type === 'stub' || e.type === 'glue';
     const p = paths[(thin ? nb : 0) + Math.floor(gl * nb)];
     p.moveTo(ax, ay);
@@ -2384,9 +2253,6 @@ function drawWeb(c, unit) {
     c.lineWidth = unit * (thin ? 0.75 : 1.1) * (CFG.pixel ? 0.55 : 1);
     c.stroke(paths[i]);
   }
-  // letters: tie-down threads, then each stroke as a cord of parallel strands
-  c.strokeStyle = rgb(mix(base, hl, 0.5), clamp(A * 0.9, 0, 1)); c.lineWidth = unit * 0.7; c.stroke(bandP);
-  if (geom.writing) drawWebLetters(c, unit, base, hl, A);
 
   // glue droplets on the capture spiral (they bead up a few seconds after laying)
   if (!CFG.pixel) {
@@ -2700,64 +2566,6 @@ function drawBugs(c, unit) {
       c.stroke();
     }
   }
-}
-
-// letters made of web: each stroke is a band of loose, wandering strands braced by short
-// cross-threads, wider on downstrokes, fraying into stray threads at the ends
-function drawWebLetters(c, unit, base, hl, A) {
-  const strands = new Path2D(), mesh = new Path2D(), fray = new Path2D();
-  const NS = CFG.pixel ? 3 : 5;
-  for (const st of geom.writing.strokes) {
-    const N = st.nodes; if (!N || N.length < 4) continue;
-    const pairs = Math.floor(N.length / 2);
-    // centre line and half-width vector per pair; width follows the stroke direction
-    const C = [], Hv = [], ok = [];
-    for (let k = 0; k < pairs; k++) {
-      const ev = N[2 * k], od = N[2 * k + 1];
-      const segOK = ev.alive && od.alive && (k === 0 || ((st.rail[2 * k] || {}).alive && (st.rail[2 * k + 1] || {}).alive));
-      const cx = (ev.x + od.x) / 2, cy = (ev.y + od.y) / 2;
-      const k2 = Math.min(pairs - 1, k + 1), k0 = Math.max(0, k - 1);
-      const ax = (N[2 * k2].x + N[2 * k2 + 1].x) / 2 - (N[2 * k0].x + N[2 * k0 + 1].x) / 2, ay = (N[2 * k2].y + N[2 * k2 + 1].y) / 2 - (N[2 * k0].y + N[2 * k0 + 1].y) / 2;
-      const dirA = Math.atan2(ay, ax);
-      const w = 0.55 + 0.75 * Math.abs(Math.sin(dirA - 0.25));       // calligraphic: thick downstrokes
-      C.push({ x: cx, y: cy }); Hv.push({ x: (od.x - ev.x) / 2 * w * 1.25, y: (od.y - ev.y) / 2 * w * 1.25 }); ok.push(segOK);
-    }
-    const P = (k, f) => ({ x: C[k].x + Hv[k].x * f, y: C[k].y + Hv[k].y * f });
-    const sid = st.id * 7.13;
-    // wandering strands
-    const fOf = (s_, k) => -1 + 2 * (s_ + 0.5) / NS + noise1(k * 0.15 + s_ * 13.7 + sid) * 0.4;
-    for (let s_ = 0; s_ < NS; s_++) {
-      let pen = false;
-      for (let k = 0; k < pairs; k++) {
-        if (!ok[k]) { pen = false; continue; }
-        const p = P(k, fOf(s_, k));
-        if (pen) strands.lineTo(p.x, p.y); else { strands.moveTo(p.x, p.y); pen = true; }
-      }
-    }
-    // short diagonal cross-threads between neighbouring strands: the web texture
-    for (let k = 1; k < pairs - 1; k++) {
-      const h = hash1(st.id * 977 + k);
-      if (h > 0.8 || !ok[k] || !ok[k + 1]) continue;
-      const s1 = Math.floor(h / 0.8 * (NS - 1)), s2 = s1 + 1;
-      const a = P(k, fOf(s1, k)), b = P(Math.min(pairs - 1, k + 1 + (h > 0.3 ? 1 : 0)), fOf(s2, k + 1));
-      mesh.moveTo(a.x, a.y); mesh.lineTo(b.x, b.y);
-    }
-    // frayed ends: strands fan out and trail off past the end of the stroke
-    for (const end of [0, pairs - 1]) {
-      if (!ok[end]) continue;
-      const nb = end === 0 ? 1 : pairs - 2; if (nb < 0 || nb >= pairs) continue;
-      const dx = C[end].x - C[nb].x, dy = C[end].y - C[nb].y, d = Math.hypot(dx, dy) || 1;
-      for (let s_ = 0; s_ < NS; s_++) {
-        const h = hash1(st.id * 31 + end * 7 + s_); if (h > 0.45) continue;
-        const p = P(end, fOf(s_, end)), L = geom.writing.band * (0.5 + h * 2.2), spread = (s_ - (NS - 1) / 2) * 0.28;
-        const ux = dx / d, uy = dy / d, ca = Math.cos(spread), sa = Math.sin(spread);
-        fray.moveTo(p.x, p.y); fray.lineTo(p.x + (ux * ca - uy * sa) * L, p.y + (ux * sa + uy * ca) * L);
-      }
-    }
-  }
-  const col = rgb(mix(base, hl, 0.85), clamp(A * 1.4 + 0.25, 0, 1));
-  c.strokeStyle = col; c.lineWidth = unit * (CFG.pixel ? 0.8 : 0.95); c.stroke(strands);
-  c.strokeStyle = rgb(mix(base, hl, 0.6), clamp(A * 1.0 + 0.1, 0, 1)); c.lineWidth = unit * 0.55; c.stroke(mesh); c.stroke(fray);
 }
 
 // Main loop, keyboard controls, boot.

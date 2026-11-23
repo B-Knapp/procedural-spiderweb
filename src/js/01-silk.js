@@ -87,7 +87,7 @@ function makeLine(a, b, rest, type) {
 
 // ------------------------------------------------------------ physics (rope: tension only)
 const GRAV = 70, DAMP = 0.982, ITER = 12;
-const STIFFT = { rim: 1, band: 1, bridge: 1, frame: 1, anchor: 1, sub: 1, glue: 1, stub: 0.6, radius: 0.7, loose: 0.9, carry: 0.9, hub: 0.5, aux: 0.5, capture: 0.35 };
+const STIFFT = { rim: 1, bridge: 1, frame: 1, anchor: 1, sub: 1, glue: 1, stub: 0.6, radius: 0.7, loose: 0.9, carry: 0.9, hub: 0.5, aux: 0.5, capture: 0.35 };
 const wind = { x: 0, y: 0, t: rand(0, 1000) };
 function updateWind(dt) {
   wind.t += dt;
@@ -100,7 +100,7 @@ function physics(dt) {
   for (const n of nodes) {
     if (n.fixed || !n.alive) { n.fx = n.fy = 0; continue; }
     const vx = (n.x - n.px) * DAMP, vy = (n.y - n.py) * DAMP; n.px = n.x; n.py = n.y;
-    const g = n.heavy ? 900 : n.light ? 0 : GRAV, wf = n.heavy ? 0.25 : n.light ? 0.15 : 1;
+    const g = n.heavy ? 900 : GRAV, wf = n.heavy ? 0.25 : 1;
     n.x += vx + (n.fx + wx * wf) * dt2; n.y += vy + (g + n.fy + wy * wf) * dt2; n.fx = n.fy = 0;
     if (sc && !n.noClamp) { n.x = clamp(n.x, sc.xL + 1, sc.xR - 1); n.y = clamp(n.y, sc.yT + 1, sc.yB - 1); }
   }
@@ -108,7 +108,7 @@ function physics(dt) {
     const e = edges[i]; if (!e.alive) continue;
     const a = e.a, b = e.b, w = a.im + b.im; if (w === 0) continue;
     const dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy);
-    if ((d <= e.rest && !e.rod) || d < 1e-6) continue;   // threads only pull; letter ribbons (rods) also push
+    if (d <= e.rest || d < 1e-6) continue;
     const k = (d - e.rest) / (d * w) * e.k;
     a.x += dx * k * a.im; a.y += dy * k * a.im; b.x -= dx * k * b.im; b.y -= dy * k * b.im;
   }
