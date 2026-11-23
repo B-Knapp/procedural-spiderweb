@@ -5,7 +5,7 @@ const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; 
 
 function newScene() {
   nodes = []; edges = []; radii = []; auxBySector = new Map(); hub = null; floatL = null; geom = {};
-  S.carry = null; S.mode = 'walk'; S.face = null; S.perch = null; S.eating = 0; S.holding = null; S.wrapping = null; S.spiral = 0; S.bend = 0; S.bendT = 0; S.lineHold = null; bugs = []; damage = []; webUp = false;
+  S.carry = null; S.mode = 'walk'; S.face = null; S.perch = null; S.eating = 0; S.holding = null; S.wrapping = null; S.spiral = 0; S.sewing = false; S.bend = 0; S.bendT = 0; S.lineHold = null; bugs = []; damage = []; webUp = false;
   const span = rand(700, 860), cx = W / 2 + rand(-60, 60);
   sc = {
     xL: Math.round(cx - span / 2), xR: Math.round(cx + span / 2), yT: Math.round(rand(205, 245)), yB: Math.round(rand(855, 885)),

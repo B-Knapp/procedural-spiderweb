@@ -32,7 +32,7 @@ function spawnBug(type) {
 function breakEdge(e) {
   if (!e.alive) return;
   if (e.type !== 'glue' && e.type !== 'stub') {
-    damage.push({ type: e.type, a: e.a, b: e.b, rid: e.rid, sector: e.sector, rpos: e.rpos });
+    damage.push({ type: e.type, a: e.a, b: e.b, rid: e.rid, sector: e.sector, rpos: e.rpos, stroke: e.stroke });
     if (e.type === 'capture') geom.broken = (geom.broken || 0) + 1;
     lastDamageT = simTime;
   }
@@ -63,7 +63,7 @@ function stickBug(b, e, t) {
     if (!best) break;
     const m = splitEdge(best.f, best.tt); b.glue.push(new Edge(B, m, Math.sqrt(bd) * 0.8 + 1, 'glue'));
   }
-  b.state = 'stuck'; b.stuckAt = simTime; b.heading = Math.atan2(b.vy, b.vx);
+  B.bug = b; b.state = 'stuck'; b.stuckAt = simTime; b.heading = Math.atan2(b.vy, b.vx);
 }
 function updateBugs(dt) {
   if (webUp && simTime > nextBugT) {
@@ -103,7 +103,7 @@ function updateBugs(dt) {
           if (Math.min(ax, e.b.x) > b.x + r || Math.max(ax, e.b.x) < b.x - r || Math.min(ay, e.b.y) > b.y + r || Math.max(ay, e.b.y) < b.y - r) continue;
           const t = clamp(((b.x - ax) * ex + (b.y - ay) * ey) / l2, 0.02, 0.98), d2 = (ax + ex * t - b.x) ** 2 + (ay + ey * t - b.y) ** 2;
           if (d2 > r * r) continue;
-          if (e.type !== 'capture') { dry = true; continue; }
+          if (e.type !== 'capture') { dry = true; if (e.type === 'band' && Math.random() < 0.25 * b.T.strength) breakEdge(e); continue; }
           if (d2 < bd) { bd = d2; best = { e, t }; }
         }
         if (best) {
@@ -129,7 +129,7 @@ function updateBugs(dt) {
         if (Math.random() < dt * b.T.tear * (1 - b.para) * 0.35) {     // struggling tears silk
           if (Math.random() < 0.4 && b.glue.some(g => g.alive)) { const g = b.glue.filter(g => g.alive); breakEdge(g[randi(0, g.length - 1)]); }
           else {
-            const near = edges.filter(f => f.alive && f.eat < 0 && (f.type === 'capture' || (f.type === 'radius' && Math.random() < 0.08 * b.T.strength)) && Math.hypot((f.a.x + f.b.x) / 2 - B.x, (f.a.y + f.b.y) / 2 - B.y) < b.T.size * 2);
+            const near = edges.filter(f => f.alive && f.eat < 0 && (f.type === 'capture' || (f.type === 'band' && Math.random() < 0.15 * b.T.strength) || (f.type === 'radius' && Math.random() < 0.08 * b.T.strength)) && Math.hypot((f.a.x + f.b.x) / 2 - B.x, (f.a.y + f.b.y) / 2 - B.y) < b.T.size * 2);
             if (near.length) breakEdge(near[randi(0, near.length - 1)]);
           }
           b.glue = b.glue.filter(g => g.alive);
@@ -205,6 +205,7 @@ function* handlePrey(b) {
     S.wrapping = null; b.comb = null;
   }
   // cut it free and carry it to the hub on a short line from the spinnerets
+  if (!b.node || b.state !== 'stuck') { S.wrapping = null; S.holding = null; say('It got away', `the ${nm} tore free`); yield* pause(1); return; }
   say('Cutting it free', 'snipping the threads that hold the parcel');
   S.face = null;
   for (const g of b.glue) if (g.alive) { const m = g.other(b.node); for (const f of m.edges.slice()) if (f.type === 'capture') breakEdge(f); killEdge(g); }
@@ -226,7 +227,7 @@ function* repairWeb() {
   const s = geom.s || 10;
   // 1. broken radii first: they carry the load
   for (const d of D) {
-    if (d.type !== 'radius' || !d.a.alive || !d.b.alive || edgeBetween(d.a, d.b)) continue;
+    if ((d.type !== 'radius' && d.type !== 'rim') || !d.a.alive || !d.b.alive || edgeBetween(d.a, d.b)) continue;
     say('Repairing the web', 'replacing a broken radius');
     if (!(yield* walkTo({ node: d.a }, WALK * 1.2))) continue;
     yield* eatStubsNear(d.a.x, d.a.y, 6);
@@ -234,14 +235,17 @@ function* repairWeb() {
     const rb = refAtNode(d.b); if (!rb) { dropCarry(); continue; }
     yield* reachTo(rb, REACH);
     yield* eatStubsNear(d.b.x, d.b.y, 6);
-    const L = layLine('radius', 0.004, {}, false);
-    if (L.line && d.rid != null) {
+    const L = layLine(d.type, 0.004, d.type === 'rim' ? { strands: 2 } : {}, false);
+    if (L.line && d.rid != null && d.type === 'radius') {
       for (const e of L.line.edges) { e.rid = d.rid; e.k = STIFFT.radius; }
       const R = radii[d.rid], ia = R.nodes.indexOf(d.a), ib = R.nodes.indexOf(d.b), mids = L.line.nodes.slice(1, -1);
       mids.forEach(n => n.rid = d.rid);
       if (ia >= 0 && ib >= 0 && mids.length) { if (ia < ib) R.nodes.splice(ib, 0, ...mids); else R.nodes.splice(ia, 0, ...mids.reverse()); }
     }
   }
+  // 1b. torn letters: re-sew each damaged stroke
+  const torn = [...new Set(D.filter(d => d.type === 'band' && d.stroke != null).map(d => d.stroke))];
+  for (const id of torn) yield* resewStroke(id);
   // 2. holes in the sticky spiral: irregular zig-zag patches between the two radii
   const bySec = new Map();
   for (const d of D) if (d.type === 'capture' && d.sector) { if (!bySec.has(d.sector)) bySec.set(d.sector, []); bySec.get(d.sector).push(d.rpos); }
@@ -259,6 +263,7 @@ function* repairWeb() {
     for (let g = 0; g < 40 && p > lo; g++) {
       p -= s * rand(0.8, 1.9);
       const rr = radiusPoint(side ? R2 : R1, Math.max(p, lo)); if (!rr) break;
+      { const q = ptOf(resolve(rr) || rr); if (inCarvedLetter(q.x, q.y)) { side = 1 - side; continue; } }   // keep the letters open
       if (!(yield* reachTo(rr, REACH))) break;
       layLine('capture', 0, { sector: key, rpos: p });
       yield* pause(0.15); side = 1 - side;

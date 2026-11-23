@@ -18,7 +18,7 @@ function hereNode() {
   const n = splitEdge(e, r.t); S.ref = { e: e.split.e1, t: 1 }; return n;
 }
 function startCarryAt(from, mode = 'taut') {
-  const tip = new Node(S.x, S.y, true); tip.keep = true;
+  const tip = new Node(S.x, S.y, true); tip.keep = true; tip.tip = true;
   const e = new Edge(from, tip, dist(from, tip), 'carry');
   S.carry = { from, tip, edge: e, mode };
   return from;
@@ -72,7 +72,7 @@ class Heap {
     return top;
   }
 }
-const COST = { sub: 1.15, bridge: 1, frame: 1, radius: 1, loose: 1.1, hub: 1.8, aux: 1.4, capture: 9 };
+const COST = { band: 1.3, sub: 1.15, bridge: 1, frame: 1, radius: 1, loose: 1.1, hub: 1.8, aux: 1.4, capture: 9 };
 function dijkstra(fromRef, visit) {
   const r = resolve(fromRef); if (!r) return null;
   const dist_ = new Map(), prev = new Map(), h = new Heap(); const L = r.e.len() * (COST[r.e.type] || 1);
@@ -137,6 +137,12 @@ function* walkTo(goal, speed = WALK) {
     if (p) { const ok = yield* followPath(p.list, p.goalRef, speed); if (ok) return true; }
     yield;
   }
+  // writes-words only: letters split some radii into pieces the planner can't link up,
+  // so the spider steps straight across the web instead
+  if (geom.carved) {
+    if (goal.node && goal.node.alive) { yield* moveFree(() => goal.node, REACH * 1.1); yield* backOnSilk(); return true; }
+    if (goal.ref && resolve(goal.ref)) { const r = resolve(goal.ref); yield* reachTo(goal.ref, REACH * 1.1); return true; }
+  }
   console.warn('walkTo failed', caption.t, goal.node ? ('node ' + goal.node.id + ' alive=' + goal.node.alive + ' deg=' + goal.node.edges.filter(walkable).length) : 'ref', 'spider on', S.ref && resolve(S.ref) ? resolve(S.ref).e.type : 'none', S.mode); return false;
 }
 function* reachTo(ref, speed = REACH) {
@@ -195,7 +201,7 @@ function spiderKinematics() {
   }
   if (S.holding && S.holding.node) { const n = S.holding.node, bk = BL * 0.12; n.x = n.px = S.x - Math.cos(S.ang) * bk; n.y = n.py = S.y - Math.sin(S.ang) * bk; }
   if (S.mode === 'perch' && S.perch) { const h = S.perch; S.x = h.x; S.y = h.y - BL * 0.5; h.fy += SW; }
-  S.bend = lerp(S.bend || 0, S.spiral ? (S.bendT || 0) : 0, 1 - Math.exp(-20 * DT));
+  S.bend = lerp(S.bend || 0, S.spiral || S.sewing ? (S.bendT || 0) : 0, 1 - Math.exp(-20 * DT));
   const c = S.carry;
   if (c) {
     if (c.tip.fixed) { const h = S.lineHold; c.tip.x = c.tip.px = h ? h.x : S.x; c.tip.y = c.tip.py = h ? h.y : S.y; }

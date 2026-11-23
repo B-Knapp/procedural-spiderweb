@@ -5,6 +5,7 @@ let caption = { t: '', s: '' };
 function say(t, s = '') { caption = { t, s }; }
 
 function* buildOrb() {
+  geom.words = CFG.writing;   // writes-words webs are built a little differently; natural webs are untouched
   // ---------- 1. bridge line ----------
   const br = yield* phaseBridge();
   const A = br.A, Fn = br.F;
@@ -42,11 +43,19 @@ function* buildOrb() {
   const M = hereNode(); hub = M; hub.keep = true;
   say('Proto-hub', 'dropping on a dragline to pull the slack line into a Y');
   yield* dropDown(M, sc.yB);
-  yield* walkTo({ ref: subRefAt('B', clamp(Hp.x + rand(-20, 20), sc.xL + 40, sc.xR - 40)) }, WALK * 0.7);
+  if (geom.words) {   // writes-words: anchor low on the nearer post, so the web stays clear of the bottom rail
+    geom.lowY = sc.yB - rand(55, 95);
+    const sd = Hp.x < (sc.xL + sc.xR) / 2 ? 'L' : 'R'; yield* walkTo({ ref: subRefAt(sd, geom.lowY + rand(-15, 15)) }, WALK * 0.7);
+  } else yield* walkTo({ ref: subRefAt('B', clamp(Hp.x + rand(-20, 20), sc.xL + 40, sc.xR - 40)) }, WALK * 0.7);
   say('Proto-hub', 'reeling in — the Y pulls tight; its centre becomes the hub');
   const target = dist(Hp, { x: S.x, y: S.y });
   S.carry.mode = 'hold';
-  while (S.carry.edge.rest > target) { S.carry.edge.rest = Math.max(target, S.carry.edge.rest - 40 * DT); yield; }
+  if (geom.words) {   // reel in until tight (an anchor off to the side can't pull the hub all the way to Hp)
+    for (let tt = 0; S.carry.edge.rest > target && tt < 12; tt += DT) {
+      const e = S.carry.edge; if (e.rest > dist(e.a, e.b) + 30) break;
+      e.rest = Math.max(target, e.rest - 40 * DT); yield;
+    }
+  } else while (S.carry.edge.rest > target) { S.carry.edge.rest = Math.max(target, S.carry.edge.rest - 40 * DT); yield; }
   yield* pause(0.6);
   const r3 = layLine('radius', 0.01, {}, false);
   registerRadius(r3.line.nodes);
@@ -167,7 +176,7 @@ function* phaseFrames(left, right) {
   if (sides[0] > 0) fr.reverse();                       // work across from the first side
   const jobs = [{ side: sides[0] }, ...fr.map(f => ({ top: f })), { side: sides[1] }];
   for (const job of jobs) {
-    if (job.side) {
+    if (job.side && !geom.words) {
       const side = job.side, end = side < 0 ? left : right;
       const ax = side < 0 ? sc.xL + rand(0.07, 0.2) * span : sc.xR - rand(0.07, 0.2) * span;
       say('Frame threads', 'carrying a new line from the hub down to an anchor');
@@ -179,6 +188,23 @@ function* phaseFrames(left, right) {
       startCarry('taut');
       yield* walkTo({ node: end });
       layLine('frame', 0.006, {}, false);
+    } else if (job.side) {
+      const side = job.side;
+      // a line from the hub down to a low anchor on this post; the second one is then
+      // joined to the first by a bottom frame line strung post to post above the rail
+      const ay = (geom.lowY || sc.yB - 75) + rand(-25, 10);
+      say('Frame threads', 'carrying a new line from the hub down to an anchor on the post');
+      yield* walkTo({ node: hub });
+      startCarry('taut');
+      yield* walkTo({ ref: subRefAt(side < 0 ? 'L' : 'R', ay) });
+      const rr = layLine('radius', 0.006, {}, false); registerRadius(rr.line.nodes);
+      const low = rr.node;
+      if (geom.lowAnchor && geom.lowAnchor.alive) {
+        say('Frame threads', 'running the bottom frame line across to the other post');
+        startCarry('taut');
+        yield* walkTo({ node: geom.lowAnchor });
+        layLine('frame', 0.004, {}, false);
+      } else geom.lowAnchor = low;
     } else {
       const bx = lerp(left.x, right.x, job.top + rand(-0.06, 0.06));
       const ref = bridgeRefAtX(bx); if (!ref) continue;
@@ -268,13 +294,15 @@ function* phaseAux() {
 
 function* phaseCapture() {
   const Rs = sortedRadii(), n = Rs.length; const Rm = geom.Rm;
-  const s = Rm / rand(24, 29); geom.s = s;
+  const s = Rm / (geom.words ? rand(50, 56) : rand(24, 29)); geom.s = s;   // writing mode: a finer spiral, so carved letters can be slimmer
   const Z = geom.rh + Rm * rand(0.1, 0.13); geom.Z = Z;
   const ang0 = Rs.map(radAngle), lens = Rs.map(radiusLen);
   const sl = [...lens].sort((a, b) => a - b);
-  const Rb = sl[Math.floor(sl.length * 0.22)] * rand(0.92, 1.0), squash = rand(0.2, 0.34);
+  // writes-words: the spiral reaches out toward the frame, to leave room for big letters
+  const Rb = geom.words ? sl[Math.floor(sl.length * 0.75)] * rand(0.92, 1.0) : sl[Math.floor(sl.length * 0.22)] * rand(0.92, 1.0);
+  const squash = geom.words ? rand(0.12, 0.22) : rand(0.2, 0.34);
   geom.env = { Rb, squash };
-  const O = Rs.map((R, i) => Math.min(lens[i] - s * 0.8, Rb * (1 + squash * Math.sin(ang0[i])) * (1 + 0.04 * Math.cos(ang0[i] * 2 + 1))));
+  const O = Rs.map((R, i) => Math.min(geom.words ? lens[i] - Math.max(s * 1.5, lens[i] * 0.07) : lens[i] - s * 0.8, Rb * (1 + squash * Math.sin(ang0[i])) * (1 + 0.04 * Math.cos(ang0[i] * 2 + 1))));
   const N = O.map(o => Math.max(1, Math.floor((o - Z) / s)));      // turns this radius can hold
   const sj = O.map((o, i) => (o - Z) / N[i]);                        // its own spacing (≈ s)
   const c = N.slice();                                               // turns still to lay

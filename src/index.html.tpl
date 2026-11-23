@@ -21,6 +21,7 @@ body.idle{cursor:none}
 <div><kbd>[</kbd><kbd>]</kbd>slower / faster</div>
 <div><kbd>T</kbd>advance one hour</div>
 <div><kbd>I</kbd>captions on / off</div>
+<div><kbd>W</kbd>natural webs / spider writes words</div>
 <div><kbd>B</kbd>send a bug</div>
 <div><kbd>N</kbd>new web &nbsp;<kbd>Space</kbd>pause &nbsp;<kbd>H</kbd>help</div>
 </div>

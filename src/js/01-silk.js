@@ -36,6 +36,8 @@ function killEdge(e) {
 function splitEdge(e, t) {
   const a = e.a, b = e.b;
   const n = new Node(lerp(a.x, b.x, t), lerp(a.y, b.y, t), e.type === 'sub');
+  if (e.type === 'sub') n.sub = true;
+  if (a.rest && b.rest) n.rest = { x: lerp(a.rest.x, b.rest.x, t), y: lerp(a.rest.y, b.rest.y, t) };
   n.px = lerp(a.px, b.px, t); n.py = lerp(a.py, b.py, t);
   const e1 = new Edge(a, n, e.rest * t, e.type), e2 = new Edge(n, b, e.rest * (1 - t), e.type);
   for (const k of COPYK) { e1[k] = e[k]; e2[k] = e[k]; }
@@ -85,7 +87,7 @@ function makeLine(a, b, rest, type) {
 
 // ------------------------------------------------------------ physics (rope: tension only)
 const GRAV = 70, DAMP = 0.982, ITER = 12;
-const STIFFT = { bridge: 1, frame: 1, anchor: 1, sub: 1, glue: 1, stub: 0.6, radius: 0.7, loose: 0.9, carry: 0.9, hub: 0.5, aux: 0.5, capture: 0.35 };
+const STIFFT = { rim: 1, band: 1, bridge: 1, frame: 1, anchor: 1, sub: 1, glue: 1, stub: 0.6, radius: 0.7, loose: 0.9, carry: 0.9, hub: 0.5, aux: 0.5, capture: 0.35 };
 const wind = { x: 0, y: 0, t: rand(0, 1000) };
 function updateWind(dt) {
   wind.t += dt;
@@ -93,11 +95,12 @@ function updateWind(dt) {
   wind.y = 10 * noise1(wind.t * 0.33 + 13);
 }
 function physics(dt) {
+  if (geom.stylized) return stylizedPhysics(dt);
   const wx = wind.x * 2.2, wy = wind.y, dt2 = dt * dt;
   for (const n of nodes) {
     if (n.fixed || !n.alive) { n.fx = n.fy = 0; continue; }
     const vx = (n.x - n.px) * DAMP, vy = (n.y - n.py) * DAMP; n.px = n.x; n.py = n.y;
-    const g = n.heavy ? 900 : GRAV, wf = n.heavy ? 0.25 : 1;
+    const g = n.heavy ? 900 : n.light ? 0 : GRAV, wf = n.heavy ? 0.25 : n.light ? 0.15 : 1;
     n.x += vx + (n.fx + wx * wf) * dt2; n.y += vy + (g + n.fy + wy * wf) * dt2; n.fx = n.fy = 0;
     if (sc && !n.noClamp) { n.x = clamp(n.x, sc.xL + 1, sc.xR - 1); n.y = clamp(n.y, sc.yT + 1, sc.yB - 1); }
   }
@@ -105,9 +108,35 @@ function physics(dt) {
     const e = edges[i]; if (!e.alive) continue;
     const a = e.a, b = e.b, w = a.im + b.im; if (w === 0) continue;
     const dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy);
-    if (d <= e.rest || d < 1e-6) continue;
+    if ((d <= e.rest && !e.rod) || d < 1e-6) continue;   // threads only pull; letter ribbons (rods) also push
     const k = (d - e.rest) / (d * w) * e.k;
     a.x += dx * k * a.im; a.y += dy * k * a.im; b.x -= dx * k * b.im; b.y -= dy * k * b.im;
+  }
+  updateFastened();
+}
+// Writes-words mode only: the web keeps the shape it had when the spider started writing, and
+// sways gently around it, so carving letters can't make it collapse. Natural mode never uses this.
+function stylizedPhysics(dt) {
+  const t = simTime, sp = S.mode === 'walk' || S.mode === 'perch' ? { x: S.x, y: S.y } : null;
+  for (const n of nodes) {
+    if (!n.alive || n.sub || n.tip) { n.fx = n.fy = 0; continue; }
+    if (n.isBug && n.bug) {   // a stuck insect stays on its threads, twitching while it struggles
+      const g = n.edges.filter(e => e.alive && e.type === 'glue'); n.fx = n.fy = 0;
+      if (!g.length || n.fixed) continue;
+      let x = 0, y = 0; for (const e of g) { const o = e.other(n); x += o.x; y += o.y; }
+      const str = n.bug.T.strength * (1 - n.bug.para), j = Math.sin(t * 23 + n.id) * 1.2 * str;
+      n.x = n.px = x / g.length + j; n.y = n.py = y / g.length + Math.cos(t * 19 + n.id) * 1.2 * str; continue;
+    }
+    if (n.fixed && !n.follow) { n.fx = n.fy = 0; continue; }
+    if (!n.rest) n.rest = { x: n.x, y: n.y };
+    const r = n.rest;
+    // sway: none where the web meets the fence, most in the middle
+    const edge = sc ? clamp(Math.min(r.x - sc.xL, sc.xR - r.x, r.y - sc.yT, sc.yB - r.y) / 160, 0, 1) : 1;
+    const amp = edge * (1.6 + Math.abs(wind.x) * 0.06);
+    let x = r.x + amp * noise1(t * 0.45 + r.x * 0.004 + r.y * 0.002) + wind.x * 0.05 * edge;
+    let y = r.y + amp * 0.7 * noise1(t * 0.4 + r.y * 0.004 + 40);
+    if (sp) { const d = Math.hypot(r.x - sp.x, r.y - sp.y); if (d < 40) y += 2.2 * (1 - d / 40) * edge; }   // gives a little under the spider
+    n.x = n.px = x; n.y = n.py = y; n.fx = n.fy = 0;
   }
 }
 function compact() { edges = edges.filter(e => e.alive); nodes = nodes.filter(n => n.alive); }
@@ -115,6 +144,7 @@ function compact() { edges = edges.filter(e => e.alive); nodes = nodes.filter(n 
 // ------------------------------------------------------------ substrate (the fence opening)
 function buildSubstrate() {
   const c1 = new Node(sc.xL, sc.yT, true), c2 = new Node(sc.xR, sc.yT, true), c3 = new Node(sc.xR, sc.yB, true), c4 = new Node(sc.xL, sc.yB, true);
+  for (const c of [c1, c2, c3, c4]) c.sub = true;
   for (const [a, b, s] of [[c1, c2, 'T'], [c2, c3, 'R'], [c4, c3, 'B'], [c1, c4, 'L']]) { const e = new Edge(a, b, 0, 'sub'); e.side = s; }
 }
 function subRefAt(side, v) {

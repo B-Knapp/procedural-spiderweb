@@ -1,7 +1,19 @@
 // The daily loop: build, tend, take the web down (eating it), new scene, repeat.
 // ============================================================ the spider's day: build, tend, take down, repeat
+// writes-words: letters cut some radii into pieces, so the spider crosses the web directly
+function* tdWalk(goal, sp) {
+  if (!geom.carved) return yield* walkTo(goal, sp);
+  yield* moveFree(() => goal.node, REACH * 1.1); yield* backOnSilk(); return true;
+}
 function* takeDown() {
   say('Taking the web down', 'orb weavers eat their old silk and recycle it');
+  if (geom.carved) {   // writes-words: unpin the lettering so it goes with the rest
+    for (const n of nodes) if (n.alive && (n.wrapPt || n.rimPt || n.boundary != null)) { n.fixed = false; n.im = 1; n.follow = null; if (!n.edges.length) n.alive = false; }
+    const deco = edges.filter(e => e.alive && e.type === 'rim');
+    if (!resolve(S.ref) || deco.some(e => resolve(S.ref).e === e)) yield* backOnSilk();
+    yield* eatEdges(deco, 0.4);
+    if (!resolve(S.ref)) yield* backOnSilk();
+  }
   const Rs = sortedRadii(); if (!Rs.length) return;
   // start with the radius nearest straight down, sweep around
   let atHub = true;
@@ -12,17 +24,18 @@ function* takeDown() {
   };
   while (todo.length) {
     const R = todo.shift();
-    let seq = liveNodes(R);
+    if (!resolve(S.ref)) yield* backOnSilk();
+    let seq = liveNodes(R).filter(n => n.edges.length);
     if (seq.length < 2) continue;
     if (!atHub) {
-      yield* walkTo({ node: seq[seq.length - 1] });
-      if (todo.length === 0) { yield* walkTo({ node: seq[0] }); atHub = true; }
+      yield* tdWalk({ node: seq[seq.length - 1] });
+      if (todo.length === 0) { yield* tdWalk({ node: seq[0] }); atHub = true; }
     }
     if (atHub) { // out
-      yield* walkTo({ node: seq[0] });
+      yield* tdWalk({ node: seq[0] });
       for (let i = 1; i < seq.length; i++) {
         if (!seq[i].alive) continue;
-        yield* walkTo({ node: seq[i] }, WALK * 1.3);
+        yield* tdWalk({ node: seq[i] }, WALK * 1.3);
         yield* eatAt(seq[i]);
         const e = edgeBetween(seq[i - 1], seq[i]); if (e) yield* eatEdges([e], 0.05);
       }
@@ -30,7 +43,7 @@ function* takeDown() {
     } else { // in
       for (let i = seq.length - 2; i >= 0; i--) {
         if (!seq[i].alive) continue;
-        yield* walkTo({ node: seq[i] }, WALK * 1.3);
+        yield* tdWalk({ node: seq[i] }, WALK * 1.3);
         yield* eatAt(seq[i]);
         const e = edgeBetween(seq[i + 1], seq[i]); if (e) yield* eatEdges([e], 0.05);
       }
@@ -69,6 +82,7 @@ function* lifeCycle() {
   for (;;) {
     yield* enter();
     yield* buildOrb();
+    if (geom.words) yield* carveWord();
     yield* tendWeb();
     yield* takeDown();
     yield* transition();
