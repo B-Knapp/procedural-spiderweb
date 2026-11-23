@@ -72,7 +72,7 @@ class Heap {
     return top;
   }
 }
-const COST = { sub: 1.15, bridge: 1, frame: 1, radius: 1, loose: 1.1, hub: 1.8, aux: 1.4, capture: 9 };
+const COST = { sub: 1.15, bridge: 1, frame: 1, radius: 1, loose: 1.1, hub: 1.8, aux: 1.4, capture: 9, rim: 9 };   // rim: a letter edge (writes-words), as costly as sticky thread
 function dijkstra(fromRef, visit) {
   const r = resolve(fromRef); if (!r) return null;
   const dist_ = new Map(), prev = new Map(), h = new Heap(); const L = r.e.len() * (COST[r.e.type] || 1);
