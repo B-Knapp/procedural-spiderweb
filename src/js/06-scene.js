@@ -6,17 +6,18 @@ const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; 
 function newScene() {
   nodes = []; edges = []; radii = []; auxBySector = new Map(); hub = null; floatL = null; geom = {};
   S.carry = null; S.mode = 'walk'; S.face = null; S.perch = null; S.eating = 0; S.holding = null; S.wrapping = null; S.spiral = 0; S.bend = 0; S.bendT = 0; S.lineHold = null; bugs = []; damage = []; webUp = false;
-  const span = rand(700, 860), cx = W / 2 + rand(-60, 60);
+  if (CFG.scene === 'alley') sc = alleyGeometry();
+  else { const span = rand(700, 860), cx = W / 2 + rand(-60, 60);
   sc = {
     xL: Math.round(cx - span / 2), xR: Math.round(cx + span / 2), yT: Math.round(rand(205, 245)), yB: Math.round(rand(855, 885)),
     postW: 52, railH: 44, barnX: rand(360, 640), barnS: rand(0.85, 1.05), millX: rand(1450, 1700), vpX: rand(820, 1100),
     seed: Math.random() * 1000,
-  };
+  }; }
   buildSubstrate();
   const side = Math.random() < 0.5 ? 'L' : 'R';
   S.ref = subRefAt(side, sc.yB - 6); syncPos(); S.ang = -Math.PI / 2;
   S.legs.forEach(L => { L.ref = null; L.step = null; L.air = true; L.fx = S.x; L.fy = S.y; });
-  paintLandscape(); paintFence(); makeGrass();
+  if (sc.alley) paintAlley(); else { paintLandscape(); paintFence(); makeGrass(); }
   lastTintT = -1;
 }
 

@@ -16,9 +16,9 @@ let hour = qs.get('hour') != null ? +qs.get('hour') : 17.2;
 let realT = 0, lastTintT = -1, P = null;
 
 function drawWeb(c, unit) {
-  const pal = P, hot = pal.sunUp ? pal.sun : (pal.moonUp ? pal.moon : null);
+  const pal = P, hot = pal.lamp || (pal.sunUp ? pal.sun : (pal.moonUp ? pal.moon : null));
   const lightAng = hot ? Math.atan2((hub ? hub.y : 600) - hot.y, (hub ? hub.x : 960) - hot.x) : -Math.PI / 2;
-  const base = pal.silk, A = pal.silkA, glow = hot ? (pal.sunUp ? 1 : 0.5) : 0.2;
+  const base = pal.silk, A = pal.silkA, glow = pal.lamp ? pal.lampGlow : hot ? (pal.sunUp ? 1 : 0.5) : 0.2;
   const nb = 5, paths = []; for (let i = 0; i < nb * 2; i++) paths.push(new Path2D());
   const capture = [], MO = mouthPos();
   for (const e of edges) {
@@ -111,7 +111,9 @@ function render() {
   const unit = 1 / k * (pix ? 1 : view.dpr);  // ~1 screen px in world units
   tc.imageSmoothingEnabled = true;
   tc.setTransform(k, 0, 0, k, ox, oy);
-  P = paletteAt(hour);
+  P = sc.alley ? alleyPalette() : paletteAt(hour);
+  if (sc.alley) { drawAlleyBack(tc, unit, pix); drawAlleyMid(tc); }
+  else {
   // tints at ~10 Hz
   if (realT - lastTintT > 0.1 || lastTintT < 0) {
     lastTintT = realT;
@@ -196,14 +198,13 @@ function render() {
     tc.fillRect(0, sc.yT - sc.railH, W, 2.5); tc.fillRect(0, sc.yB, W, 2.5);
     tc.globalCompositeOperation = 'source-over';
   }
+  }
   // web + spider
   drawWeb(tc, unit);
   drawBugs(tc, unit);
   drawSpiderLit(tc, k, ox, oy, pix);
-  // foreground grass
-  drawGrass(tc, unit);
-  // motes / fireflies
-  drawParticles(tc, unit, pix);
+  if (sc.alley) drawAlleyFront(tc, unit, pix);   // drips and rain in front
+  else { drawGrass(tc, unit); drawParticles(tc, unit, pix); }   // foreground grass, motes, fireflies
   tc.setTransform(1, 0, 0, 1, 0, 0);
   if (pix) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false; ctx.drawImage(lowCv, 0, 0, tw * PX, th * PX); }
   // vignette (screen space)
@@ -226,7 +227,7 @@ function drawSpiderLit(tc, k, ox, oy, pix) {
   g.setTransform(k, 0, 0, k, px / 2 - cxW * k, px / 2 - cyW * k);
   drawSpider(g);
   g.setTransform(1, 0, 0, 1, 0, 0);
-  tintInto(spiderCanvas2, spiderCanvas, P.tint.map(v => Math.min(1, v * 1.08 + 0.05)));
+  tintInto(spiderCanvas2, spiderCanvas, (P.spTint || P.tint).map(v => Math.min(1, v * 1.08 + 0.05)));
   const outC = spiderCanvas2;
   tc.save(); tc.setTransform(1, 0, 0, 1, 0, 0);
   // soft shadow-ish contact darkness when backlit

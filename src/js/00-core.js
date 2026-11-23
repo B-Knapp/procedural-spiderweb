@@ -5,13 +5,14 @@ const qs = new URLSearchParams(location.search);
 const SPEEDS = [0.5, 1, 2, 4, 8, 16];
 const CFG = {
   speedIdx: SPEEDS.indexOf(+qs.get('speed')) >= 0 ? SPEEDS.indexOf(+qs.get('speed')) : 2,
-  pixel: false, captions: true, bigSpider: false, writing: false, dayMinutes: 60, PX: 3,
+  pixel: false, captions: true, bigSpider: false, writing: false, scene: 'farm', dayMinutes: 60, PX: 3,
 };
-try { const s = JSON.parse(localStorage.getItem('orbweaver') || '{}'); if (s.pixel != null) CFG.pixel = s.pixel; if (s.captions != null) CFG.captions = s.captions; if (s.bigSpider != null) CFG.bigSpider = s.bigSpider; if (s.writing != null) CFG.writing = s.writing; } catch (e) {}
+try { const s = JSON.parse(localStorage.getItem('orbweaver') || '{}'); if (s.pixel != null) CFG.pixel = s.pixel; if (s.captions != null) CFG.captions = s.captions; if (s.bigSpider != null) CFG.bigSpider = s.bigSpider; if (s.writing != null) CFG.writing = s.writing; if (s.scene) CFG.scene = s.scene; } catch (e) {}
 if (qs.get('write') != null) CFG.writing = qs.get('write') === '1';
+if (qs.get('scene')) CFG.scene = qs.get('scene') === 'alley' ? 'alley' : 'farm';
 if (qs.get('big') != null) CFG.bigSpider = qs.get('big') === '1';
 if (qs.get('pixel') != null) CFG.pixel = qs.get('pixel') === '1';
-const saveCfg = () => { try { localStorage.setItem('orbweaver', JSON.stringify({ pixel: CFG.pixel, captions: CFG.captions, bigSpider: CFG.bigSpider, writing: CFG.writing })); } catch (e) {} };
+const saveCfg = () => { try { localStorage.setItem('orbweaver', JSON.stringify({ pixel: CFG.pixel, captions: CFG.captions, bigSpider: CFG.bigSpider, writing: CFG.writing, scene: CFG.scene })); } catch (e) {} };
 
 // ============================================================ math
 const TAU = Math.PI * 2;

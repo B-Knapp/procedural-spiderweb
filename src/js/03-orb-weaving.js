@@ -6,6 +6,7 @@ function say(t, s = '') { caption = { t, s }; }
 
 function* buildOrb() {
   geom.words = CFG.writing;   // writes-words webs are built a little differently; natural webs are untouched
+  geom.fill = geom.words || !!sc.alley;   // ...and in writes-words or the big alley frame, the sticky spiral reaches out toward the frame
   // ---------- 1. bridge line ----------
   const br = yield* phaseBridge();
   const A = br.A, Fn = br.F;
@@ -45,7 +46,7 @@ function* buildOrb() {
   yield* dropDown(M, sc.yB);
   if (geom.words) {   // writes-words: anchor low on the nearer post, so the web stays clear of the bottom rail
     geom.lowY = sc.yB - rand(55, 95);
-    const sd = Hp.x < (sc.xL + sc.xR) / 2 ? 'L' : 'R'; yield* walkTo({ ref: subRefAt(sd, geom.lowY + rand(-15, 15)) }, WALK * 0.7);
+    const sd = Hp.x < (sc.xL + sc.xR) / 2 ? 'L' : 'R'; geom.ySide = sd === 'L' ? -1 : 1; yield* walkTo({ ref: subRefAt(sd, geom.lowY + rand(-15, 15)) }, WALK * 0.7);
   } else yield* walkTo({ ref: subRefAt('B', clamp(Hp.x + rand(-20, 20), sc.xL + 40, sc.xR - 40)) }, WALK * 0.7);
   say('Proto-hub', 'reeling in — the Y pulls tight; its centre becomes the hub');
   const target = dist(Hp, { x: S.x, y: S.y });
@@ -59,6 +60,7 @@ function* buildOrb() {
   yield* pause(0.6);
   const r3 = layLine('radius', 0.01, {}, false);
   registerRadius(r3.line.nodes);
+  if (geom.words) geom.lowAnchor = r3.node;   // the Y's anchor low on the post doubles as that side's lower frame anchor
   for (const e of M.edges.slice()) if (e.alive && e.type === 'loose') {
     const ns = followType(M, e, 'loose'); for (let i = 0; i < ns.length - 1; i++) { const ee = edgeBetween(ns[i], ns[i + 1]); if (ee) ee.type = 'radius'; }
     registerRadius(ns);
@@ -190,6 +192,7 @@ function* phaseFrames(left, right) {
       layLine('frame', 0.006, {}, false);
     } else if (job.side) {
       const side = job.side;
+      if (side === geom.ySide) continue;   // the Y thread already runs from the hub to a low anchor on this post
       // a line from the hub down to a low anchor on this post; the second one is then
       // joined to the first by a bottom frame line strung post to post above the rail
       const ay = (geom.lowY || sc.yB - 75) + rand(-25, 10);
@@ -260,7 +263,11 @@ function* phaseRadii() {
 }
 
 function* phaseAux() {
-  const Rs = sortedRadii(), n = Rs.length, lens = Rs.map(radiusLen), Rm = median(lens);
+  const Rs = sortedRadii(), n = Rs.length, lens = Rs.map(radiusLen);
+  // the web's working size. In the wide alley frame the radii running left and right are far longer
+  // than the rest, so size the web from the ones running up and down: real orb webs stay roughly round
+  const vert = lens.filter((l, i) => Math.abs(Math.sin(radAngle(Rs[i]))) > 0.6);
+  const Rm = sc.alley && vert.length >= 3 ? median(vert) : median(lens);
   const rh0 = Math.max(6, Rm * 0.022), rh = Rm * 0.085, hubTurns = randi(3, 5), K = rand(4.2, 6.0), Rend = Rm * 0.86;
   Object.assign(geom, { rh, Rm });
   let j = randi(0, n - 1); const d = Math.random() < 0.5 ? 1 : -1; let phi = 0, phase = 'hub';
@@ -294,15 +301,16 @@ function* phaseAux() {
 
 function* phaseCapture() {
   const Rs = sortedRadii(), n = Rs.length; const Rm = geom.Rm;
-  const s = Rm / (geom.words ? rand(50, 56) : rand(24, 29)); geom.s = s;   // writing mode: a finer spiral, so carved letters can be slimmer
+  const s = Rm / (geom.words ? rand(50, 56) : rand(24, 29)); geom.s = s;   // writing mode: a finer spiral, so carved letters can be slimmer   // writing mode: a finer spiral, so carved letters can be slimmer
   const Z = geom.rh + Rm * rand(0.1, 0.13); geom.Z = Z;
   const ang0 = Rs.map(radAngle), lens = Rs.map(radiusLen);
   const sl = [...lens].sort((a, b) => a - b);
   // writes-words: the spiral reaches out toward the frame, to leave room for big letters
-  const Rb = geom.words ? sl[Math.floor(sl.length * 0.75)] * rand(0.92, 1.0) : sl[Math.floor(sl.length * 0.22)] * rand(0.92, 1.0);
-  const squash = geom.words ? rand(0.12, 0.22) : rand(0.2, 0.34);
+  const alleyRound = sc.alley;   // alley: a round-ish spiral sized by the up/down radii (see phaseAux)
+  const Rb = alleyRound ? Rm * rand(0.86, 0.94) : geom.fill ? sl[Math.floor(sl.length * 0.75)] * rand(0.92, 1.0) : sl[Math.floor(sl.length * 0.22)] * rand(0.92, 1.0);
+  const squash = geom.fill ? rand(0.12, 0.22) : rand(0.2, 0.34);
   geom.env = { Rb, squash };
-  const O = Rs.map((R, i) => Math.min(geom.words ? lens[i] - Math.max(s * 1.5, lens[i] * 0.07) : lens[i] - s * 0.8, Rb * (1 + squash * Math.sin(ang0[i])) * (1 + 0.04 * Math.cos(ang0[i] * 2 + 1))));
+  const O = Rs.map((R, i) => Math.min(geom.fill ? lens[i] - Math.max(s * 1.5, lens[i] * 0.07) : lens[i] - s * 0.8, Rb * (1 + squash * Math.sin(ang0[i])) * (1 + 0.04 * Math.cos(ang0[i] * 2 + 1)) * (alleyRound ? 1 + (geom.words ? 0.42 : 0.18) * Math.cos(ang0[i]) ** 2 : 1)));
   const N = O.map(o => Math.max(1, Math.floor((o - Z) / s)));      // turns this radius can hold
   const sj = O.map((o, i) => (o - Z) / N[i]);                        // its own spacing (≈ s)
   const c = N.slice();                                               // turns still to lay

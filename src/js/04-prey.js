@@ -12,7 +12,7 @@ function applyScale() {
   for (const k in BUGT) BUGT[k].size = BUGT[k].base * BL / 33;
 }
 function pickBugType() {
-  const day = hour >= 6.5 && hour < 19.2, r = Math.random();
+  const day = !sc.alley && hour >= 6.5 && hour < 19.2, r = Math.random();   // the alley is always night
   if (day) return r < 0.3 ? 'gnat' : r < 0.8 ? 'fly' : r < 0.9 ? 'beetle' : 'moth';
   return r < 0.3 ? 'gnat' : r < 0.42 ? 'fly' : r < 0.52 ? 'beetle' : 'moth';
 }
@@ -273,7 +273,7 @@ function damageFrac() { return (geom.broken || 0) / Math.max(1, geom.capTotal ||
 function rebuildDue(t0) {
   const age = simTime - t0;
   if (damageFrac() > 0.3) return 'damaged';
-  const day = hour >= 6.5 && hour < 18.6;
+  const day = sc.alley || (hour >= 6.5 && hour < 18.6);   // alley webs stay up as long as farm webs by day
   return day ? age > 3600 : age > 700;
 }
 function* tendWeb() {

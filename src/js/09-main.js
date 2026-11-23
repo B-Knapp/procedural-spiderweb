@@ -41,6 +41,7 @@ addEventListener('keydown', e => {
   else if (k === 'i') { CFG.captions = !CFG.captions; saveCfg(); hud(CFG.captions ? 'Captions on' : 'Captions off'); }
   else if (k === 's') { CFG.bigSpider = !CFG.bigSpider; saveCfg(); applyScale(); hud(CFG.bigSpider ? 'Enlarged spider & prey' : 'True-to-life scale'); }
   else if (k === 'w') { CFG.writing = !CFG.writing; saveCfg(); hud(CFG.writing ? 'Writing mode: the next web gets a word' : 'Natural webs'); }
+  else if (k === 'a') { CFG.scene = CFG.scene === 'alley' ? 'farm' : 'alley'; saveCfg(); newScene(); brain = lifeCycle(); hud(CFG.scene === 'alley' ? 'Rainy alley' : 'Farm'); }
   else if (k === 'b') { if (webUp) { spawnBug(); hud('Here comes a bug'); } else hud('Bugs come once the web is finished'); }
   else if (k === 'n') { newScene(); brain = lifeCycle(); hud('New web'); }
   else if (k === 'f') { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {}); else document.exitFullscreen?.(); }

@@ -132,6 +132,7 @@ function* followPath(list, goalRef, speed) {
   }
 }
 function* walkTo(goal, speed = WALK) {
+  if (!resolve(S.ref) && S.mode === 'walk') yield* backOnSilk();   // e.g. a repair ate the thread underfoot: step back onto the web first
   for (let tries = 0; tries < 8; tries++) {
     const p = plan(goal);
     if (p) { const ok = yield* followPath(p.list, p.goalRef, speed); if (ok) return true; }

@@ -10,7 +10,7 @@ const { chromium } = require('playwright');
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.text()); });
-  await page.goto('file://' + path.resolve(__dirname, '../index.html') + '?debug&hour=12' + (process.env.WRITE ? '&write=1' : ''));
+  await page.goto('file://' + path.resolve(__dirname, '../index.html') + '?debug&hour=12' + (process.env.WRITE ? '&write=1' : '') + (process.env.SCENE ? '&scene=' + process.env.SCENE : ''));
   await page.waitForTimeout(500);
   await page.keyboard.press('Space'); // pause the page's own clock; the test drives the simulation
 
