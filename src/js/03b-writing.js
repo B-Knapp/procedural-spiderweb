@@ -99,7 +99,7 @@ const GLYPHS = (() => {
     "'": { w: 0.04, p: true, tk: 0.7, s: [[[0.03, -0.02], [0.0, 0.26]]] },
     ',': { w: 0.04, p: true, tk: 0.7, s: [[[0.03, 0.9], [0.0, 1.12]]] },
     '-': { w: 0.32, p: true, s: [[[0, 0.56], [0.32, 0.56]]] },
-    '?': { w: 0.48, p: true, s: [[[0.02, 0.2], [0.12, 0.04], [0.3, 0], [0.44, 0.1], [0.46, 0.28], [0.34, 0.42], [0.22, 0.52], [0.22, 0.7]], [[0.22, 0.96], [0.22, 0.98]]] },
+    '?': { w: 0.58, p: true, pr: [0, 0.85], s: [[[0.083, 0.356], [0.061, 0.272], [0.069, 0.185], [0.105, 0.107], [0.167, 0.045], [0.245, 0.009], [0.332, 0.001], [0.416, 0.023], [0.487, 0.073], [0.537, 0.144], [0.559, 0.228], [0.551, 0.315], [0.515, 0.393], [0.34, 0.49], [0.31, 0.54]], [[0.31, 0.95], [0.31, 0.97]]] },   // hook in the thin stroke, short stem, dot well clear of it
   };
 })();
 let TRACK = 0.2;   // letter spacing, in letter heights
@@ -147,11 +147,13 @@ function wordStrokes(L) {
         if (L.widths) {
           const ends = [0, poly.length - 1].filter((_, k) => free[k]).map(i => pts[i]);
           for (const st of out.slice(startI)) {
-            const P = st.pts; st.rs = P.map((q, k) => {
+            const P = st.pts, pw = g.pr ? g.pr[g.s.indexOf(poly)] : null;
+            if (pw != null) { st.rs = P.map(() => pw === 0 ? L.thin : L.R * pw); continue; }
+            st.rs = P.map((q, k) => {
               const a = P[Math.max(0, k - 1)], b = P[Math.min(P.length - 1, k + 1)], dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1;
               const vert = Math.abs(dy) / l, stress = dx * dy > 0 ? Math.max(vert, 0.9) : vert * 0.85;
               let r = L.thin + (L.R - L.thin) * stress;
-              for (const E of ends) { const d = dist(q, E) / L.h; if (d < 0.16) r *= 1 + 0.32 * (1 - d / 0.16) ** 2; }
+              if (!g.p) for (const E of ends) { const d = dist(q, E) / L.h; if (d < 0.16) r *= 1 + 0.32 * (1 - d / 0.16) ** 2; }
               return r;
             });
           }
@@ -207,6 +209,17 @@ function updateFastened() {
 // (cutLetter), and a rim thread lines whatever stretch of the edge nothing else does (rimLetter).
 const segT = (p, a, b) => { const ex = b.x - a.x, ey = b.y - a.y, l2 = ex * ex + ey * ey; return l2 ? clamp(((p.x - a.x) * ex + (p.y - a.y) * ey) / l2, 0, 1) : 0; };
 function letterField(strokes, R = 0) { return p => { let m = 1e9; for (const st of strokes) { const P = st.pts, rs = st.rs, add = R * (1 - (st.rf || 1)); for (let i = 1; i < P.length; i++) { let d; if (rs) { const a = P[i - 1], b = P[i], t = segT(p, a, b); d = Math.hypot(a.x + (b.x - a.x) * t - p.x, a.y + (b.y - a.y) * t - p.y) + R - lerp(rs[i - 1], rs[i], t); } else d = segDist(p, P[i - 1], P[i]) + add; if (d < m) m = d; } } return m; }; }
+// the first stretch of a→b that lies inside the letter, as fractions along it (t1 = 1 if it
+// stays inside to b). A long thread can cross a letter twice; only the first crossing is
+// handled here, so the web between the two (e.g. inside the hook of a ?) is left alone.
+function firstRun(a, b, inside, N = 40) {
+  const at = t => inside(lerpP(a, b, t)), edge = (lo, hi) => { const flip = at(lo); for (let k = 0; k < 14; k++) { const m = (lo + hi) / 2; if (at(m) === flip) lo = m; else hi = m; } return (lo + hi) / 2; };
+  let k0 = -1; for (let k = 0; k <= N; k++) if (at(k / N)) { k0 = k; break; }
+  if (k0 < 0) return null;
+  const t0 = k0 === 0 ? 0 : edge((k0 - 1) / N, k0 / N);
+  let k1 = -1; for (let k = k0 + 1; k <= N; k++) if (!at(k / N)) { k1 = k; break; }
+  return { t0, t1: k1 < 0 ? 1 : edge((k1 - 1) / N, k1 / N) };
+}
 function lerpP(a, b, t) { return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) }; }
 function boundaryT(a, b, inside) { let lo = 0, hi = 1; const ia = inside(a); for (let k = 0; k < 14; k++) { const m = (lo + hi) / 2; if (inside(lerpP(a, b, m)) === ia) lo = m; else hi = m; } return (lo + hi) / 2; }
 // a cut end is held where it was cut (the tension around it keeps it in place)
@@ -248,9 +261,9 @@ function* cutLetter(letter) {
       yield* eatEdges([cls(a) === 'I' ? e.split.e1 : e.split.e2], 0.12); continue;
     }
     // passes through: cut at both crossings, eat the middle
-    let tin = 0.5; for (let k = 1; k < 8; k++) if (inside(lerpP(a, b, k / 8))) { tin = k / 8; break; }
-    const n1 = splitEdge(e, boundaryT(a, lerpP(a, b, tin), inside) * tin); pin(n1, letter.id);
-    const rest = e.split.e2, n2 = splitEdge(rest, 1 - boundaryT(rest.b, rest.a, inside)); pin(n2, letter.id);
+    const run = firstRun(a, b, inside); if (!run || run.t1 >= 1) continue;
+    const n1 = splitEdge(e, run.t0); pin(n1, letter.id);
+    const rest = e.split.e2, n2 = splitEdge(rest, (run.t1 - run.t0) / (1 - run.t0)); pin(n2, letter.id);
     yield* eatEdges([rest.split.e1], 0.12);
   }
 }
@@ -304,13 +317,13 @@ function* wrapLetter(letter, letters) {
   for (const c of chains) {
     const e = c.entry;
     if (c.exit === e) {
-      let tin = 0.5; for (let k = 1; k < 10; k++) if (inside(lerpP(e.a, e.b, k / 10))) { tin = k / 10; break; }
-      c.tA = boundaryT(e.a, lerpP(e.a, e.b, tin), inside) * tin;
-      const tb = boundaryT(e.b, lerpP(e.b, e.a, 1 - tin), inside) * (1 - tin); c.tB = 1 - tb;
+      const run = firstRun(e.a, e.b, inside); if (!run || run.t1 >= 1) { c.skip = true; continue; }
+      c.tA = run.t0; c.tB = run.t1;
       c.A = lerpP(e.a, e.b, c.tA); c.B = lerpP(e.a, e.b, c.tB);
     } else {
-      c.tA = boundaryT(e.a, e.b, inside); c.A = lerpP(e.a, e.b, c.tA);
-      if (c.exit) { const x = c.exit; c.tB = boundaryT(x.a, x.b, inside); c.B = lerpP(x.a, x.b, c.tB); }
+      const fromU = c.u === e.a ? firstRun(e.a, e.b, inside) : firstRun(e.b, e.a, inside);
+      c.tA = c.u === e.a ? fromU.t0 : 1 - fromU.t0; c.A = lerpP(e.a, e.b, c.tA);
+      if (c.exit) { const x = c.exit, fw = c.w === x.a ? firstRun(x.a, x.b, inside) : firstRun(x.b, x.a, inside); c.tB = c.w === x.a ? fw.t0 : 1 - fw.t0; c.B = lerpP(x.a, x.b, c.tB); }
     }
     c.wrap = false;
     if (!c.B) continue;
@@ -318,7 +331,8 @@ function* wrapLetter(letter, letters) {
     const L = loops[pa.l], n = L.length, fw = (pb.i - pa.i + n) % n, bw = n - fw;
     c.loop = pa.l; c.i0 = pa.i; c.dir = fw <= bw ? 1 : -1; c.steps = Math.min(fw, bw);
     c.arc = c.steps * 2.2;
-    c.wrap = c.arc <= geom.carved.h * 1.35 + letter.R * 2 && c.steps > 2;
+    // a ? is cut and tied off rather than wrapped: detours round its hook would fill the hook's opening
+    c.wrap = letter.ch !== '?' && c.arc <= geom.carved.h * 1.35 + letter.R * 2 && c.steps > 2;
   }
   // stack: shortest detours innermost
   const lay = chains.filter(c => c.wrap).sort((a, b) => a.arc - b.arc);
@@ -339,7 +353,7 @@ function* wrapLetter(letter, letters) {
     c.path = resample([c.A, ...pts.filter((_, k) => k % 3 === 0 && k > 0 && k < pts.length - 1), c.B], 8);
   }
   // now do it, working outward from the shortest
-  const todo = [...lay.filter(c => c.wrap), ...chains.filter(c => !c.wrap)];
+  const todo = [...lay.filter(c => c.wrap), ...chains.filter(c => !c.wrap && !c.skip)];
   for (const c of todo) {
     if (!c.entry.alive && !c.entry.split) continue;
     yield* moveFree(() => c.A, REACH * 1.1);
@@ -501,8 +515,9 @@ function* carveWord() {
   let best = null;
   for (let t = 0; t < 24; t++) {
     const w = qs.has('debug') && qs.get('phrase') ? qs.get('phrase').toUpperCase() : pickWord(), l = layoutCarved(w); if (!l) continue;   // ?debug&phrase=… forces one (testing)
-    if (!best || l.h > best.L.h) best = { w, L: l };
-    if (l.h >= 46) break;
+    const need = w.includes('?') ? 56 : 46;   // a ? needs more room than a letter to read
+    if (!best || l.h - need > best.L.h - best.need) best = { w, L: l, need };
+    if (l.h >= need) break;
   }
   if (best) { word = best.w; L = best.L; lastPhrase = word; }
   if (!L) { TRACK = 0.2; return; }
