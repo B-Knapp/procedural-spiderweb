@@ -865,26 +865,64 @@ function nearestWalkRef() { const nr = nearestThread(S.x, S.y, 400, S.x, S.y, 40
 // the outline, so the letters read as clear holes ringed by bunched silk. The word stays until
 // the next web.
 
-// famous bands, 1967-2010 (names with punctuation or digits are left out for now)
-const BANDS = [
-  'THE BEATLES', 'THE ROLLING STONES', 'THE DOORS', 'THE WHO', 'THE KINKS', 'THE BYRDS', 'PINK FLOYD', 'CREAM', 'THE BAND',
-  'THE STOOGES', 'LED ZEPPELIN', 'BLACK SABBATH', 'JEFFERSON AIRPLANE', 'CREEDENCE CLEARWATER REVIVAL', 'THE VELVET UNDERGROUND',
-  'STEPPENWOLF', 'DEEP PURPLE', 'FLEETWOOD MAC',
-  'QUEEN', 'KISS', 'EAGLES', 'ABBA', 'RUSH', 'YES', 'GENESIS', 'BOSTON', 'JOURNEY', 'AEROSMITH', 'STEELY DAN', 'LYNYRD SKYNYRD',
-  'THE RAMONES', 'THE CLASH', 'SEX PISTOLS', 'TALKING HEADS', 'THE POLICE', 'BLONDIE', 'DEVO', 'VAN HALEN', 'TOTO', 'CHICAGO',
-  'HEART', 'THE CARS', 'JOY DIVISION', 'TELEVISION', 'THIN LIZZY', 'BEE GEES', 'THE JAM', 'BAD COMPANY',
-  'THE CURE', 'THE SMITHS', 'DEPECHE MODE', 'DURAN DURAN', 'NEW ORDER', 'TEARS FOR FEARS', 'DEF LEPPARD', 'BON JOVI', 'METALLICA',
-  'MOTLEY CRUE', 'PIXIES', 'SONIC YOUTH', 'THE REPLACEMENTS', 'HUSKER DU', 'INXS', 'THE PRETENDERS', 'EURYTHMICS', 'BEASTIE BOYS',
-  'PUBLIC ENEMY', 'DEAD KENNEDYS', 'MINOR THREAT',
-  'NIRVANA', 'PEARL JAM', 'SOUNDGARDEN', 'ALICE IN CHAINS', 'RADIOHEAD', 'OASIS', 'BLUR', 'PULP', 'WEEZER', 'GREEN DAY',
-  'THE SMASHING PUMPKINS', 'NINE INCH NAILS', 'RAGE AGAINST THE MACHINE', 'FOO FIGHTERS', 'PAVEMENT', 'PORTISHEAD', 'MASSIVE ATTACK',
-  'DAFT PUNK', 'TOOL', 'KORN', 'NO DOUBT', 'THE CRANBERRIES', 'HOLE', 'BUSH', 'SUBLIME', 'THE ROOTS',
-  'THE STROKES', 'THE WHITE STRIPES', 'THE KILLERS', 'ARCTIC MONKEYS', 'COLDPLAY', 'MUSE', 'INTERPOL', 'ARCADE FIRE', 'YEAH YEAH YEAHS',
-  'LINKIN PARK', 'QUEENS OF THE STONE AGE', 'MODEST MOUSE', 'THE SHINS', 'VAMPIRE WEEKEND', 'KINGS OF LEON', 'THE BLACK KEYS',
-  'FRANZ FERDINAND', 'GORILLAZ', 'MGMT', 'PHOENIX', 'BLOC PARTY', 'THE NATIONAL', 'FLEET FOXES',
+// what the spider writes (the user's list)
+const PHRASES = [
+  "I KNOW YOU'RE THERE", "DON'T LOOK UP", "YOU'RE NEXT", "I'VE BEEN WATCHING", "IT'S TOO LATE", "WE NEED TO TALK",
+  "RUN WHILE YOU CAN", "I REMEMBER YOU", "SOMETHING IS COMING", "YOU CAME BACK", "I SEE EVERYTHING", "THERE YOU ARE",
+  "DON'T MOVE", "I KNOW WHAT YOU DID", "IT KNOWS", "YOU SHOULDN'T BE HERE", "NOT ALONE", "BEHIND YOU", "I'VE BEEN EXPECTING YOU",
+  "THE WALLS ARE LISTENING", "THIS ISN'T OVER", "YOU CAN'T HIDE", "I'M STILL HERE", "IT'S HUNGRY", "SWEET DREAMS",
+  "YOU LOOK DELICIOUS", "NICE TRY", "BUG OFF", "NOT TODAY", "FREE HUGS", "I'M HUNGRY", "CATCH ME IF YOU CAN",
+  "EIGHT IS ENOUGH", "NO SOLICITORS", "PLEASE KNOCK", "HOME SWEET WEB", "MIND THE WEB", "I'M NOT HOME", "GO AWAY",
+  "YOU AGAIN?", "THIS IS AWKWARD", "I'M ON A BREAK", "DO YOU MIND?", "NO VACANCY", "I BITE", "YOU HAD ONE JOB",
+  "THAT'S MY DINNER", "KEEP WALKING", "I'M BUSY", "SPIDER BUSINESS", "NOTHING IS CONNECTED", "WE ARE ALL THREADS",
+  "TIME IS A TRAP", "EVERYTHING IS FOOD", "LIFE IS FRAGILE", "THE WEB REMEMBERS", "YOU ARE NOT ALONE", "EVERYTHING UNRAVELS",
+  "NOTHING LASTS FOREVER", "THE THREAD OF FATE", "ALL THINGS COME TOGETHER", "WE ARE WHAT WE CATCH", "EVERY END IS A BEGINNING",
+  "THE VOID STARES BACK", "EXISTENCE IS STICKY", "WHAT IS REAL?", "NOTHING IS RANDOM", "THE CENTRE HOLDS",
+  "FOLLOW THE THREAD", "WE ALL HANG BY A THREAD", "THE WORLD IS A WEB", "THERE ARE NO ACCIDENTS", "EVERYTHING IS TEMPORARY",
+  "LOOK CLOSER", "YOU ARE THE PATTERN", "I'M FEELING STUCK", "IT'S COMPLICATED", "I'VE MADE A MISTAKE", "CALL YOUR MOTHER",
+  "I NEED A VACATION", "THIS IS MY HOUSE", "I'M NOT READY", "I HAVE QUESTIONS", "IT'S BEEN A LONG DAY", "PLEASE LEAVE A MESSAGE",
+  "I'M WORKING ON IT", "WE SHOULD SEE OTHER PEOPLE", "I NEED SPACE", "I'M HAVING A MOMENT", "IT'S NOT YOU, IT'S ME",
+  "I FORGOT WHY I CAME HERE", "I'VE HAD BETTER DAYS", "THIS WAS A BAD IDEA", "CAN WE START OVER?", "I NEED COFFEE",
+  "I'M TRYING MY BEST", "DON'T TELL ANYONE", "I'M FINE, REALLY", "IT'S A LONG STORY", "I'M NOT YOUR THERAPIST",
+  "YOU'RE ON THE MENU", "DINNER IS SERVED", "FRESH MEAT", "COME CLOSER", "I DARE YOU", "MAKE MY DAY", "YOU LOOK LIKE LUNCH",
+  "THE HUNT BEGINS", "NO ESCAPE", "YOUR MOVE", "PICK A CORNER", "I'VE GOT EIGHT REASONS", "RESISTANCE IS FUTILE",
+  "YOU'RE MAKING THIS WORSE", "DON'T TEST ME", "I WOULDN'T DO THAT", "THIS IS YOUR WARNING", "LAST CHANCE",
+  "YOU'VE BEEN CAUGHT", "PREPARE YOURSELF", "I'M NOT BLUFFING", "YOU'RE IN MY WEB NOW", "THIS ENDS HERE",
+  "THERE WILL BE CONSEQUENCES", "I HOPE YOU'RE TASTY", "THE ANSWER IS BELOW", "ASK THE MOON", "SEVEN DAYS",
+  "THE THIRD THREAD", "WHEN IT RAINS", "AT MIDNIGHT", "THE DOOR IS OPEN", "FOLLOW THE SILVER THREAD", "NOT WHAT IT SEEMS",
+  "THE SECRET IS INSIDE", "WAIT FOR THE WIND", "WHEN THE LIGHTS GO OUT", "THE FIRST ONE KNOWS", "COUNT THE LEGS",
+  "LOOK BENEATH", "IT WAS ALWAYS YOU", "THE PATTERN IS BROKEN", "FIND THE CENTRE", "DON'T TRUST THE SILENCE",
+  "THE WEB IS A LIE", "SOMEBODY KNOWS", "THE THREAD LEADS HOME", "YOU MISSED A SPOT", "THE LAST THREAD",
+  "NOTHING TO SEE HERE", "BANANA", "I LIKE CHEESE", "WHO MOVED MY ROCK?", "THE MOON IS MADE OF SOUP", "HAVE YOU SEEN MY SOCK?",
+  "I AM A VERY SMALL HORSE", "THIS IS NOT A DRILL", "POTATOES ARE WATCHING", "THE DUCK KNOWS", "PLEASE FEED THE VOID",
+  "I DEMAND WAFFLES", "BREAD IS SUSPICIOUS", "WHERE IS MY HAT?", "THE FLOOR IS LAVA", "DON'T EAT THE SPOON",
+  "I USED TO BE A CATERPILLAR", "TUESDAY IS CANCELLED", "THE FROG WAS RIGHT", "BEWARE OF THE BISCUITS", "WE HAVE RUN OUT OF BISCUITS",
+  "I SAW A GHOST ONCE", "NEVER TRUST A TURNIP", "THE PIGEONS ARE LYING", "HAVE A NICE APOCALYPSE", "THIS WEB IS SPONSORED",
+  "EIGHT IS GREAT", "MY OTHER WEB IS BETTER", "BUILT WITH LEGS", "SPINNING IS MY CARDIO", "IT'S A WEB OF LIES",
+  "I MAKE MY OWN CLOTHES", "SILK HAPPENS", "STICK AROUND", "WEB DESIGNER", "JUST HANGING AROUND", "I HAVE EIGHT PROBLEMS",
+  "DON'T BUG ME", "I WORK FROM HOME", "CATCH YOU LATER", "WEB OF OPPORTUNITY", "I'M VERY ATTACHED", "IT'S A STICKY SITUATION",
+  "SPIN DOCTOR", "THREAD LIGHTLY", "I HAVE TOO MANY LEGS", "BUILT DIFFERENT", "THE WEB IS MY OFFICE", "I'M SELF-EMPLOYED",
+  "NO STRINGS ATTACHED", "SILK AND DESTROY", "A BEAUTIFUL TRAP", "THE SILENCE BETWEEN THREADS", "WHERE DREAMS GET CAUGHT",
+  "ALL THINGS END IN SILK", "A DELICATE DEATH", "THE NIGHT HAS EIGHT EYES", "A WEB OF SORROWS", "DANCE WITH THE DARK",
+  "THE LAST LITTLE LIGHT", "BEAUTY IN THE BINDING", "A THOUSAND TINY THREADS", "THE HUNGER WITHIN", "NO WINGS REQUIRED",
+  "THE DARK IS PATIENT", "EVERY THREAD HAS A STORY", "THE WORLD HANGS HERE", "A FRAGILE KINGDOM", "THE ART OF WAITING",
+  "SILENCE IS GOLDEN", "WEAVING DESTINY", "A LITTLE DEATH", "THE FINAL SPIRAL", "WHEN WORLDS COLLIDE", "THE BEAUTY OF DECAY",
+  "NOTHING ESCAPES THE WEB", "WHY ARE YOU HERE?", "WHAT HAVE YOU DONE?", "WHO'S WATCHING WHOM?", "WHAT HAPPENS NEXT?",
+  "ARE YOU SURE?", "WHAT IF I'M RIGHT?", "HOW DID YOU GET HERE?", "WHO MADE THE FIRST WEB?", "WHAT IS YOUR PURPOSE?",
+  "WOULD YOU LIKE TO KNOW?", "WHY NOT?", "WHAT ARE YOU WAITING FOR?", "IS THIS REAL?", "WHO'S THE MONSTER?",
+  "WHAT DID YOU EXPECT?", "DO YOU BELIEVE IN FATE?", "WHAT LIES BEYOND?", "CAN YOU HEAR ME?", "WHO ARE YOU REALLY?",
+  "WHAT WOULD YOU SACRIFICE?", "ARE WE THERE YET?", "HOW MANY THREADS?", "WHAT'S THE WORST THAT COULD HAPPEN?",
+  "DID YOU SEE THAT?", "WHY SO SERIOUS?", "HELP", "RUN", "WAIT", "HUNGRY", "MINE", "HELLO", "GOODBYE", "AGAIN",
+  "NEVER", "ALWAYS", "LISTEN", "REMEMBER", "FORGIVE", "BEWARE", "ESCAPE", "SILENCE", "WATCH", "HIDE", "CAUGHT",
+  "ALIVE", "TRAPPED", "CURIOUS", "DELICIOUS", "INCOMING", "SURPRISE", "I'VE SEEN YOUR FUTURE", "YOUR SHOELACE IS UNTIED",
+  "THE SPIDER IS IN CHARGE", "I KNOW WHERE YOU SLEEP", "DON'T FEED THE HUMANS", "WE HAVE MET BEFORE", "THE INTERNET IS A WEB",
+  "I HAVE A SECRET", "SOMETHING SMELLS FUNNY", "YOU LEFT THE LIGHT ON", "THERE'S A FLY IN MY SOUP", "I'M NOT THE ONLY ONE",
+  "YOU'RE EARLY", "THIS IS A TEST", "PLEASE REMAIN CALM", "I CAN EXPLAIN", "IT WAS THE BUTLER", "YOU'RE DOING GREAT",
+  "CONGRATULATIONS", "I MADE THIS FOR YOU", "WE'VE BEEN EXPECTING YOU", "YOU'VE GOT SOMETHING ON YOUR BACK",
+  "DON'T PANIC", "THE END IS NIGH", "SEE YOU TOMORROW",
 ];
-let lastBand = null;
-const pickWord = () => { let w; do { w = BANDS[randi(0, BANDS.length - 1)]; } while (w === lastBand && BANDS.length > 1); lastBand = w; return w; };
+let lastPhrase = null;
+const pickWord = () => { let w; do { w = PHRASES[randi(0, PHRASES.length - 1)]; } while (w === lastPhrase && PHRASES.length > 1); lastPhrase = w; return w; };
 
 // single-stroke capitals: polylines in a box of height 1 (y down); w = advance width
 const GLYPHS = (() => {
@@ -919,10 +957,16 @@ const GLYPHS = (() => {
     Y: { w: 0.6, s: [[[0, 0], [0.08, 0.28], [0.3, 0.52], [0.52, 0.28], [0.6, 0]], [[0.3, 0.52], [0.3, 1]]] },
     Z: { w: 0.56, s: [[[0, 0], [0.56, 0], [0, 1], [0.56, 1]]] },
     ' ': { w: 0.35, s: [] },
+    // punctuation (p: no serifs; tk: tighter spacing either side)
+    "'": { w: 0.04, p: true, tk: 0.7, s: [[[0.03, -0.02], [0.0, 0.26]]] },
+    ',': { w: 0.04, p: true, tk: 0.7, s: [[[0.03, 0.9], [0.0, 1.12]]] },
+    '-': { w: 0.32, p: true, s: [[[0, 0.56], [0.32, 0.56]]] },
+    '?': { w: 0.48, p: true, s: [[[0.02, 0.2], [0.12, 0.04], [0.3, 0], [0.44, 0.1], [0.46, 0.28], [0.34, 0.42], [0.22, 0.52], [0.22, 0.7]], [[0.22, 0.96], [0.22, 0.98]]] },
   };
 })();
 let TRACK = 0.2;   // letter spacing, in letter heights
-const lineWidth = t => [...t].reduce((a, ch) => a + (GLYPHS[ch] ? GLYPHS[ch].w : 0.5) + TRACK, -TRACK);
+const adv = g => g.w + TRACK * (g.tk || 1);
+const lineWidth = t => [...t].reduce((a, ch) => a + adv(GLYPHS[ch] || GLYPHS[' ']), -TRACK);
 
 // where the sticky spiral actually reaches at height y (so words sit inside the real web)
 function spiralSpan(y0, y1) {
@@ -975,7 +1019,7 @@ function wordStrokes(L) {
           }
         }
         // serifs: a short foot across every free, mostly-vertical stroke end at the top or bottom
-        if (L.serif) for (const [i, j] of [[0, 1], [poly.length - 1, poly.length - 2]]) {
+        if (L.serif && !g.p) for (const [i, j] of [[0, 1], [poly.length - 1, poly.length - 2]]) {
           const [gx, gy] = poly[i], [hx, hy] = poly[j];
           if (Math.abs(gy) > 0.05 && Math.abs(gy - 1) > 0.05) continue;
           if (Math.abs(hy - gy) < 1.8 * Math.abs(hx - gx)) continue;
@@ -985,7 +1029,7 @@ function wordStrokes(L) {
           out.push({ id: out.length, ch, letter, rf: 0.5, pts: resample([{ x: x + (gx - sw) * L.h, y: py }, { x: x + (gx + sw) * L.h, y: py }], Math.max(2.4, L.h * 0.045)) });
         }
       }
-      x += (g.w + TRACK) * L.h;
+      x += adv(g) * L.h;
     }
   }
   return out;
@@ -1269,14 +1313,17 @@ function layoutCarved(text) {
   let topY = 1e9, botY = -1e9; for (const e of caps) { const y = (e.a.y + e.b.y) / 2; topY = Math.min(topY, y); botY = Math.max(botY, y); }
   const Rb = geom.env ? geom.env.Rb : geom.Rm, gapZ = (geom.Z || Rb * 0.2) + Rb * 0.04;
   const above = { y0: topY + 6, y1: hub.y - gapZ }, below = { y0: hub.y + gapZ, y1: botY - 6 };
-  const words = text.split(' '), sp = geom.s || 10;
+  // break points: between words, and just after a hyphen (the hyphen stays at the line's end)
+  const words = [], glue = [];   // glue[i]: what joins words[i] to the next one on the same line
+  for (const w of text.split(' ')) { const bits = w.split(/(?<=-)/); bits.forEach((x, k) => { words.push(x); glue.push(k < bits.length - 1 ? '' : ' '); }); }
+  const sp = geom.s || 10;
   const strokeR = h => Math.max(h * 0.14, sp * 1.35);       // holes must be well wider than the spiral gaps
-  // every way to break the name into lines at word boundaries (whole words only)
+  // every way to break the phrase into lines (whole words only, or after a hyphen)
   const parts = [];
   for (let mask = 0; mask < 1 << (words.length - 1); mask++) {
-    const lines = []; let cur = [words[0]];
-    for (let i = 1; i < words.length; i++) { if (mask & (1 << (i - 1))) { lines.push(cur.join(' ')); cur = [words[i]]; } else cur.push(words[i]); }
-    lines.push(cur.join(' ')); if (lines.length <= 4) parts.push(lines);
+    const lines = []; let cur = words[0];
+    for (let i = 1; i < words.length; i++) { if (mask & (1 << (i - 1))) { lines.push(cur); cur = words[i]; } else cur += glue[i - 1] + words[i]; }
+    lines.push(cur); if (lines.length <= 4) parts.push(lines);
   }
   // stack some lines in a region and check each fits the spiral at its height
   // a letter reaches past its line box: stroke width, flared ends and serifs, then the threads
@@ -1284,7 +1331,7 @@ function layoutCarved(text) {
   const stack = (lines, r, h) => {
     if (!lines.length) return [];
     const ext = strokeR(h) * 1.45 + 12 + sp * 1.5;
-    const gap = h * 0.32, need = lines.length * h + (lines.length - 1) * gap;
+    const gap = h * 0.5, need = lines.length * h + (lines.length - 1) * gap;
     if (r.y1 - r.y0 < need + 2 * ext) return null;
     const y0 = (r.y0 + r.y1) / 2 - need / 2, out = [];
     for (let i = 0; i < lines.length; i++) {
@@ -1312,7 +1359,14 @@ function layoutCarved(text) {
 function* carveWord() {
   if (!hub || !geom.env) return;
   let L = null, word = '';
-  for (let t = 0; t < 12 && !L; t++) { word = pickWord(); L = layoutCarved(word); }
+  // long phrases can only be written small: try a few and take the first that reads well
+  let best = null;
+  for (let t = 0; t < 24; t++) {
+    const w = qs.has('debug') && qs.get('phrase') ? qs.get('phrase').toUpperCase() : pickWord(), l = layoutCarved(w); if (!l) continue;   // ?debug&phrase=… forces one (testing)
+    if (!best || l.h > best.L.h) best = { w, L: l };
+    if (l.h >= 46) break;
+  }
+  if (best) { word = best.w; L = best.L; lastPhrase = word; }
   if (!L) { TRACK = 0.2; return; }
   TRACK = L.track; const strokes = wordStrokes(L); TRACK = 0.2;
   const R = L.R;
